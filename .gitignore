@@ -1,0 +1,7 @@
+runDir*
+m5out*
+resources-*
+ckpts*
+ckptDir*
+gem5/build
+run_logs
