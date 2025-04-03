@@ -4,7 +4,7 @@ bank_pll -i 30000000000 -c 3 -a read -e 0 -m 1280 -b 0xC0 -l 16 & # attacker on 
 sleep 1 # Increased sleep duration to ensure attackers are fully started
 
 # Start victim after CPU switch
-bank_pll -i 50 -c 0 -a read -e 0 -m 10240 -b 0xC0 -l 16 & # victim
+bank_pll -i 50 -c 0 -a read -e 0 -m 10240 -b 0xC0 -l 16 -x & # victim
 wait
 
 

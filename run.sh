@@ -4,7 +4,7 @@
 export GIT_ROOT=$(pwd)
 GEM5_DIR=${GIT_ROOT}/gem5
 GUEST_SCRIPT_DIR=${GIT_ROOT}/guest-scripts
-RESOURCES=${GIT_ROOT}/resources-sync
+RESOURCES=${GIT_ROOT}/resources-palloc
 RUNDIR_BASE="${GIT_ROOT}/rundir"
 
 # Default parameters based on ARM Cortex-A72
@@ -15,11 +15,11 @@ GUEST_SCRIPT="same-bank.sh"
 RESTORE=2
 
 # Memory hierarchy parameters (A72 typical configs)
-L1D_SIZE="32kB"
+L1D_SIZE="64kB"
 L1I_SIZE="64kB"
 L2_SIZE="2MB"
-L1D_ASSOC=2
-L1I_ASSOC=3
+L1D_ASSOC=8
+L1I_ASSOC=8
 L2_ASSOC=16
 
 # Bank and bandwidth regulation parameters
@@ -164,7 +164,7 @@ while true; do
     esac
 done
 
-CKPT_DIR=${GIT_ROOT}/ckpts-sync-2/$GUEST_SCRIPT
+CKPT_DIR=${GIT_ROOT}/ckpts-palloc-2bins-320wss/$GUEST_SCRIPT
 RUNDIR=""
 
 function setup_dirs {
@@ -176,7 +176,7 @@ function setup_dirs {
 
 # Setup RUNDIR based on parameters outside of run_simulation
 if [[ -n "$checkpoint" ]]; then
-    RUNDIR=${GIT_ROOT}/ckptDir/$GUEST_SCRIPT-sync-2
+    RUNDIR=${GIT_ROOT}/ckptDir/$GUEST_SCRIPT-palloc-2bins-320wss
 else
     # Create descriptive directory name including bank configs
     BANK_INFO=""
@@ -199,7 +199,7 @@ else
         MSHR_INFO=""
     fi
     
-    RUNDIR=${GIT_ROOT}/runDir/$GUEST_SCRIPT-4b-en-sync-2
+    RUNDIR=${GIT_ROOT}/runDir-3/$GUEST_SCRIPT-palloc-2bins-320wss
 fi
 
 function run_simulation {
@@ -250,7 +250,7 @@ function run_simulation {
         --num-l2caches=1 \
         --mem-type=DDR4_2400_16x4 \
         --mem-channels=1 \
-        --mem-size=2048MB \
+        --mem-size=4096MB \
         --script="$GIT_ROOT/$GUEST_SCRIPT_DIR/$GUEST_SCRIPT" \
         --checkpoint-dir="$CKPT_DIR" \
         --cpu-clock=$Freq \
@@ -259,7 +259,6 @@ function run_simulation {
         --param=system.l2.enable_bw_regulation=False \
         --param=system.l2.num_banks=4 \
         --param=system.l2.bank_intlv_high_bit=7 \
-        --l2_size $L2_SIZE \
         --param=system.l2.monitor_window=$MONITOR_WINDOW \
         --param=system.cpu[:].icache.enable_banks=False \
         --param=system.cpu[:].dcache.enable_banks=False \

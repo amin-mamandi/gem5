@@ -6,7 +6,7 @@ export GIT_ROOT=$(pwd)
 # Common parameters
 COMMON_PARAMS="--num-cpus 4 --take-checkpoint"
 # Base directory for checkpoints 
-CKPT_BASE_DIR="$GIT_ROOT/ckpts-sync-2"
+CKPT_BASE_DIR="$GIT_ROOT/ckpts-palloc-2bins-320wss"
 REQUIRED_CHECKPOINT=3  # We need 3 checkpoint directories
 
 # Define script patterns for read operations
@@ -18,21 +18,21 @@ READ_SCRIPTS=(
     "diff-1attck-2560-read.sh"
     "diff-1attck-3200-read.sh"
     "diff-1attck-5120-read.sh"
-    # "diff-1attck-10240-read.sh"
+    "diff-1attck-320-read.sh"
     "diff-2attck-640-read.sh"
     "diff-2attck-1280-read.sh"
     "diff-2attck-1920-read.sh"
     "diff-2attck-2560-read.sh"
     "diff-2attck-3200-read.sh"
     "diff-2attck-5120-read.sh"
-    # "diff-2attck-10240-read.sh"
+    "diff-2attck-320-read.sh"
     "diff-3attck-640-read.sh"
     "diff-3attck-1280-read.sh"
     "diff-3attck-1920-read.sh"
     "diff-3attck-2560-read.sh"
     "diff-3attck-3200-read.sh"
     "diff-3attck-5120-read.sh"
-    # "diff-3attck-10240-read.sh"
+    "diff-3attck-320-read.sh"
     
     # same read scripts with 1, 2, and 3 attackers
     "same-1attck-640-read.sh"
@@ -41,21 +41,43 @@ READ_SCRIPTS=(
     "same-1attck-2560-read.sh"
     "same-1attck-3200-read.sh"
     "same-1attck-5120-read.sh"
-    # "same-1attck-10240-read.sh"
+    "same-1attck-320-read.sh"
     "same-2attck-640-read.sh"
     "same-2attck-1280-read.sh"
     "same-2attck-1920-read.sh"
     "same-2attck-2560-read.sh"
     "same-2attck-3200-read.sh"
     "same-2attck-5120-read.sh"
-    # "same-2attck-10240-read.sh"
+    "same-2attck-320-read.sh"
     "same-3attck-640-read.sh"
     "same-3attck-1280-read.sh"
     "same-3attck-1920-read.sh"
     "same-3attck-2560-read.sh"
     "same-3attck-3200-read.sh"
     "same-3attck-5120-read.sh"
-    # "same-3attck-10240-read.sh"
+    "same-3attck-320-read.sh"
+
+    "same-1attck-640-write.sh"
+    "same-1attck-1280-write.sh"
+    "same-1attck-1920-write.sh"
+    "same-1attck-2560-write.sh"
+    "same-1attck-3200-write.sh"
+    "same-1attck-5120-write.sh"
+    "same-1attck-320-write.sh"
+    "same-2attck-640-write.sh"
+    "same-2attck-1280-write.sh"
+    "same-2attck-1920-write.sh"
+    "same-2attck-2560-write.sh"
+    "same-2attck-3200-write.sh"
+    "same-2attck-5120-write.sh"
+    "same-2attck-320-write.sh"
+    "same-3attck-640-write.sh"
+    "same-3attck-1280-write.sh"
+    "same-3attck-1920-write.sh"
+    "same-3attck-2560-write.sh"
+    "same-3attck-3200-write.sh"
+    "same-3attck-5120-write.sh"  
+    "same-3attck-320-write.sh"
 
     "diff-1attck-640-write.sh"
     "diff-1attck-1280-write.sh"
@@ -63,21 +85,21 @@ READ_SCRIPTS=(
     "diff-1attck-2560-write.sh"
     "diff-1attck-3200-write.sh"
     "diff-1attck-5120-write.sh"
-    # "diff-1attck-10240-write.sh"
+    "diff-1attck-320-write.sh"
     "diff-2attck-640-write.sh"
     "diff-2attck-1280-write.sh"
     "diff-2attck-1920-write.sh"
     "diff-2attck-2560-write.sh"
     "diff-2attck-3200-write.sh"
     "diff-2attck-5120-write.sh"
-    # "diff-2attck-10240-write.sh"
+    "diff-2attck-320-write.sh"
     "diff-3attck-640-write.sh"
     "diff-3attck-1280-write.sh"
     "diff-3attck-1920-write.sh"
     "diff-3attck-2560-write.sh"
     "diff-3attck-3200-write.sh"
     "diff-3attck-5120-write.sh"
-    # "diff-3attck-10240-write.sh"
+    "diff-3attck-320-write.sh"
     
     # same write scripts with 1, 2, and 3 attackers
     "same-1attck-640-write.sh"
@@ -86,36 +108,29 @@ READ_SCRIPTS=(
     "same-1attck-2560-write.sh"
     "same-1attck-3200-write.sh"
     "same-1attck-5120-write.sh"
-    # "same-1attck-10240-write.sh"
+    "same-1attck-320-write.sh"
     "same-2attck-640-write.sh"
     "same-2attck-1280-write.sh"
     "same-2attck-1920-write.sh"
     "same-2attck-2560-write.sh"
     "same-2attck-3200-write.sh"
     "same-2attck-5120-write.sh"
-    # "same-2attck-10240-write.sh"
+    "same-2attck-320-write.sh"
     "same-3attck-640-write.sh"
     "same-3attck-1280-write.sh"
     "same-3attck-1920-write.sh"
     "same-3attck-2560-write.sh"
     "same-3attck-3200-write.sh"
     "same-3attck-5120-write.sh"
-    # "same-3attck-10240-write.sh"
+    "same-3attck-320-write.sh"
 
-    # "solo-4bank-640-singleBank-read.sh"
-    # "solo-4bank-1280-singleBank-read.sh"
-    # "solo-4bank-1920-singleBank-read.sh"
-    # "solo-4bank-2560-singleBank-read.sh"
-    # "solo-4bank-3200-singleBank-read.sh"
-    # "solo-4bank-5120-singleBank-read.sh"
-    # "solo-4bank-10240-singleBank-read.sh"
-    # "solo-4bank-640-singleBank-write.sh"
-    # "solo-4bank-1280-singleBank-write.sh"
-    # "solo-4bank-1920-singleBank-write.sh"
-    # "solo-4bank-2560-singleBank-write.sh"
-    # "solo-4bank-3200-singleBank-write.sh"
-    # "solo-4bank-5120-singleBank-write.sh"
-    # "solo-4bank-10240-singleBank-write.sh"
+    "solo-4bank-640-singleBank-read.sh"
+    "solo-4bank-1280-singleBank-read.sh"
+    "solo-4bank-1920-singleBank-read.sh"
+    "solo-4bank-2560-singleBank-read.sh"
+    "solo-4bank-3200-singleBank-read.sh"
+    "solo-4bank-5120-singleBank-read.sh"
+    "solo-4bank-320-singleBank-read.sh"
 )
 
 WRITE_SCRIPTS=(
@@ -126,21 +141,21 @@ WRITE_SCRIPTS=(
     "diff-1attck-2560-write.sh"
     "diff-1attck-3200-write.sh"
     "diff-1attck-5120-write.sh"
-    "diff-1attck-10240-write.sh"
+    "diff-1attck-320-write.sh"
     "diff-2attck-640-write.sh"
     "diff-2attck-1280-write.sh"
     "diff-2attck-1920-write.sh"
     "diff-2attck-2560-write.sh"
     "diff-2attck-3200-write.sh"
     "diff-2attck-5120-write.sh"
-    "diff-2attck-10240-write.sh"
+    "diff-2attck-320-write.sh"
     "diff-3attck-640-write.sh"
     "diff-3attck-1280-write.sh"
     "diff-3attck-1920-write.sh"
     "diff-3attck-2560-write.sh"
     "diff-3attck-3200-write.sh"
     "diff-3attck-5120-write.sh"
-    "diff-3attck-10240-write.sh"
+    "diff-3attck-320-write.sh"
     
     # same write scripts with 1, 2, and 3 attackers
     "same-1attck-640-write.sh"
@@ -149,21 +164,21 @@ WRITE_SCRIPTS=(
     "same-1attck-2560-write.sh"
     "same-1attck-3200-write.sh"
     "same-1attck-5120-write.sh"
-    "same-1attck-10240-write.sh"
+    "same-1attck-320-write.sh"
     "same-2attck-640-write.sh"
     "same-2attck-1280-write.sh"
     "same-2attck-1920-write.sh"
     "same-2attck-2560-write.sh"
     "same-2attck-3200-write.sh"
     "same-2attck-5120-write.sh"
-    "same-2attck-10240-write.sh"
+    "same-2attck-320-write.sh"
     "same-3attck-640-write.sh"
     "same-3attck-1280-write.sh"
     "same-3attck-1920-write.sh"
     "same-3attck-2560-write.sh"
     "same-3attck-3200-write.sh"
     "same-3attck-5120-write.sh"
-    "same-3attck-10240-write.sh"
+    "same-3attck-320-write.sh"
 )
 
 # Create the checkpoints directory if it doesn't exist
@@ -233,10 +248,10 @@ run_simulations() {
         
         # Determine script directory and checkpoint directory based on read or write operation
         if [[ "$script" == *-read.sh ]]; then
-            script_dir="guest-scripts-write-sync"
+            script_dir="guest-scripts-write-palloc"
             ckpt_suffix="read"
         else
-            script_dir="guest-scripts-write-sync"
+            script_dir="guest-scripts-write-palloc"
             ckpt_suffix="write"
         fi
         
@@ -244,7 +259,7 @@ run_simulations() {
         
         # Run the script with the appropriate directory
         # Set the checkpoint directory structure properly
-        ckpt_dir_param="--checkpoint-dir ${GIT_ROOT}/ckpts-sync-2/${script%.sh}"
+        ckpt_dir_param="--checkpoint-dir ${GIT_ROOT}/ckpts-palloc-2bins-320wss/${script%.sh}"
         
         ./ckpt.sh $COMMON_PARAMS $bank_params --script-dir "$script_dir" --script "$script" $ckpt_dir_param $latency_param &
         pid=$!
@@ -292,9 +307,9 @@ run_with_concurrency_limit() {
         
         # Determine script directory based on read or write operation
         if [[ "$script" == *-read.sh ]]; then
-            script_dir="guest-scripts-write-sync"
+            script_dir="guest-scripts-write-palloc"
         else
-            script_dir="guest-scripts-write-sync"
+            script_dir="guest-scripts-write-palloc"
         fi
         
         echo "Starting simulation for $script with params: $COMMON_PARAMS $bank_params --script-dir $script_dir --script $script"

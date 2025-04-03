@@ -3,34 +3,33 @@
 PWD=$(pwd)
 # Common parameters
 COMMON_PARAMS="--num-cpus 4"
-CKPT_BASE_DIR="$PWD/ckpts-sync-2"  # Modified to match your first script's structure
+CKPT_BASE_DIR="$PWD/ckpts-palloc-2bins-320wss"  # Modified to match your first script's structure
 REQUIRED_CHECKPOINT=3  # We need checkpoint #4
 
 # Define script patterns for read operations
 READ_SCRIPTS=(
-    # diff read scripts with 1, 2, and 3 attackers
+    # # diff read scripts with 1, 2, and 3 attackers
     "diff-1attck-640-read.sh"
     "diff-1attck-1280-read.sh"
     "diff-1attck-1920-read.sh"
     "diff-1attck-2560-read.sh"
     "diff-1attck-3200-read.sh"
     "diff-1attck-5120-read.sh"
-    "diff-1attck-10240-read.sh"
+    "diff-1attck-320-read.sh"
     "diff-2attck-640-read.sh"
     "diff-2attck-1280-read.sh"
     "diff-2attck-1920-read.sh"
     "diff-2attck-2560-read.sh"
     "diff-2attck-3200-read.sh"
     "diff-2attck-5120-read.sh"
-    "diff-2attck-10240-read.sh"
+    "diff-2attck-320-read.sh"
     "diff-3attck-640-read.sh"
     "diff-3attck-1280-read.sh"
     "diff-3attck-1920-read.sh"
     "diff-3attck-2560-read.sh"
     "diff-3attck-3200-read.sh"
     "diff-3attck-5120-read.sh"
-    "diff-3attck-10240-read.sh"
-
+    "diff-3attck-320-read.sh"
     
     # same read scripts with 1, 2, and 3 attackers
     "same-1attck-640-read.sh"
@@ -39,36 +38,74 @@ READ_SCRIPTS=(
     "same-1attck-2560-read.sh"
     "same-1attck-3200-read.sh"
     "same-1attck-5120-read.sh"
-    "same-1attck-10240-read.sh"
+    "same-1attck-320-read.sh"
     "same-2attck-640-read.sh"
     "same-2attck-1280-read.sh"
     "same-2attck-1920-read.sh"
     "same-2attck-2560-read.sh"
     "same-2attck-3200-read.sh"
     "same-2attck-5120-read.sh"
-    "same-2attck-10240-read.sh"
+    "same-2attck-320-read.sh"
     "same-3attck-640-read.sh"
     "same-3attck-1280-read.sh"
     "same-3attck-1920-read.sh"
     "same-3attck-2560-read.sh"
     "same-3attck-3200-read.sh"
     "same-3attck-5120-read.sh"
-    "same-3attck-10240-read.sh"
+    "same-3attck-320-read.sh"
 
-    # "solo-4bank-640-singleBank-read.sh"
-    # "solo-4bank-1280-singleBank-read.sh"
-    # "solo-4bank-1920-singleBank-read.sh"
-    # "solo-4bank-2560-singleBank-read.sh"
-    # "solo-4bank-3200-singleBank-read.sh"
-    # "solo-4bank-5120-singleBank-read.sh"
-    # "solo-4bank-10240-singleBank-read.sh"
-    # "solo-4bank-640-singleBank-write.sh"
-    # "solo-4bank-1280-singleBank-write.sh"
-    # "solo-4bank-1920-singleBank-write.sh"
-    # "solo-4bank-2560-singleBank-write.sh"
-    # "solo-4bank-3200-singleBank-write.sh"
-    # "solo-4bank-5120-singleBank-write.sh"
-    # "solo-4bank-10240-singleBank-write.sh"
+    "solo-4bank-640-singleBank-read.sh"
+    "solo-4bank-1280-singleBank-read.sh"
+    "solo-4bank-1920-singleBank-read.sh"
+    "solo-4bank-2560-singleBank-read.sh"
+    "solo-4bank-3200-singleBank-read.sh"
+    "solo-4bank-5120-singleBank-read.sh"
+    "solo-4bank-320-singleBank-read.sh"
+
+
+    "same-1attck-640-write.sh"
+    "same-1attck-1280-write.sh"
+    "same-1attck-1920-write.sh"
+    "same-1attck-2560-write.sh"
+    "same-1attck-3200-write.sh"
+    "same-1attck-5120-write.sh"
+    "same-1attck-320-write.sh"
+    "same-2attck-640-write.sh"
+    "same-2attck-1280-write.sh"
+    "same-2attck-1920-write.sh"
+    "same-2attck-2560-write.sh"
+    "same-2attck-3200-write.sh"
+    "same-2attck-5120-write.sh"
+    "same-2attck-320-write.sh"
+    "same-3attck-640-write.sh"
+    "same-3attck-1280-write.sh"
+    "same-3attck-1920-write.sh"
+    "same-3attck-2560-write.sh"
+    "same-3attck-3200-write.sh"
+    "same-3attck-5120-write.sh"
+    "same-3attck-320-write.sh"
+
+    "diff-1attck-640-write.sh"
+    "diff-1attck-1280-write.sh"
+    "diff-1attck-1920-write.sh"
+    "diff-1attck-2560-write.sh"
+    "diff-1attck-3200-write.sh"
+    "diff-1attck-5120-write.sh"
+    "diff-1attck-320-write.sh"
+    "diff-2attck-640-write.sh"
+    "diff-2attck-1280-write.sh"
+    "diff-2attck-1920-write.sh"
+    "diff-2attck-2560-write.sh"
+    "diff-2attck-3200-write.sh"
+    "diff-2attck-5120-write.sh"
+    "diff-2attck-320-write.sh"
+    "diff-3attck-640-write.sh"
+    "diff-3attck-1280-write.sh"
+    "diff-3attck-1920-write.sh"
+    "diff-3attck-2560-write.sh"
+    "diff-3attck-3200-write.sh"
+    "diff-3attck-5120-write.sh"
+    "diff-3attck-320-write.sh"
 )
 
 WRITE_SCRIPTS=(
@@ -79,21 +116,21 @@ WRITE_SCRIPTS=(
     "diff-1attck-2560-write.sh"
     "diff-1attck-3200-write.sh"
     "diff-1attck-5120-write.sh"
-    # "diff-1attck-10240-write.sh"
+    # "diff-1attck-320-write.sh"
     "diff-2attck-640-write.sh"
     "diff-2attck-1280-write.sh"
     "diff-2attck-1920-write.sh"
     "diff-2attck-2560-write.sh"
     "diff-2attck-3200-write.sh"
     "diff-2attck-5120-write.sh"
-    # "diff-2attck-10240-write.sh"
+    # "diff-2attck-320-write.sh"
     "diff-3attck-640-write.sh"
     "diff-3attck-1280-write.sh"
     "diff-3attck-1920-write.sh"
     "diff-3attck-2560-write.sh"
     "diff-3attck-3200-write.sh"
     "diff-3attck-5120-write.sh"
-    # "diff-3attck-10240-write.sh"
+    # "diff-3attck-320-write.sh"
     
     # same write scripts with 1, 2, and 3 attackers
     "same-1attck-640-write.sh"
@@ -102,21 +139,21 @@ WRITE_SCRIPTS=(
     "same-1attck-2560-write.sh"
     "same-1attck-3200-write.sh"
     "same-1attck-5120-write.sh"
-    # "same-1attck-10240-write.sh"
+    # "same-1attck-320-write.sh"
     "same-2attck-640-write.sh"
     "same-2attck-1280-write.sh"
     "same-2attck-1920-write.sh"
     "same-2attck-2560-write.sh"
     "same-2attck-3200-write.sh"
     "same-2attck-5120-write.sh"
-    # "same-2attck-10240-write.sh"
+    # "same-2attck-320-write.sh"
     "same-3attck-640-write.sh"
     "same-3attck-1280-write.sh"
     "same-3attck-1920-write.sh"
     "same-3attck-2560-write.sh"
     "same-3attck-3200-write.sh"
     "same-3attck-5120-write.sh"
-    # "same-3attck-10240-write.sh"
+    # "same-3attck-320-write.sh"
 )
 
 # Store which scripts have completed checkpointing
@@ -177,16 +214,16 @@ run_single_simulation() {
 
     # Determine script directory and checkpoint directory based on read or write operation
     if [[ "$script" == *-read.sh ]]; then
-        script_dir="guest-scripts-write-sync"
+        script_dir="guest-scripts-write-palloc"
         ckpt_suffix="read"
     else
-        script_dir="guest-scripts-write-sync"
+        script_dir="guest-scripts-write-palloc"
         ckpt_suffix="write"
     fi
-    
+    sleep 60
     # Now it's safe to launch the simulation
     echo "Starting simulation for $script with params: $COMMON_PARAMS $bank_params --script $script $mshr_param $l2size_param"
-    ./run-copy.sh $COMMON_PARAMS $bank_params --script-dir "$script_dir" --script "$script" $mshr_param $l2size_param &
+    ./run.sh $COMMON_PARAMS $bank_params --script-dir "$script_dir" --script "$script" $mshr_param $l2size_param &
     pid=$!    
     echo "Started process with PID: $pid"
     
@@ -229,7 +266,7 @@ check_and_run_simulations() {
         # Wait a bit before next round-robin check if not all ready
         if [ "$all_ready" = "false" ]; then
             echo "Not all checkpoints are ready yet. Waiting 60 seconds before next check..."
-            sleep 60
+            sleep 30
         fi
     done
     
@@ -279,7 +316,7 @@ trap "kill $count_pid 2>/dev/null" EXIT
 
 # Define the parameters to test
 MSHRS=(32)
-L2_SIZES=(8MB)  # L2 cache sizes to sweep
+L2_SIZES=(2MB)  # L2 cache sizes to sweep
 
 # Maximum allowed concurrent gem5 processes
 MAX_PROCESSES=75

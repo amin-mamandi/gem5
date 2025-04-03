@@ -4,7 +4,7 @@
 export GIT_ROOT=$(pwd)
 GEM5_DIR=${GIT_ROOT}/gem5
 GUEST_SCRIPT_DIR=${GIT_ROOT}/guest-scripts
-RESOURCES=${GIT_ROOT}/resources-sync
+RESOURCES=${GIT_ROOT}/resources-palloc
 RUNDIR_BASE="${GIT_ROOT}/rundir"
 
 # Default parameters based on ARM Cortex-A72
@@ -167,7 +167,7 @@ while true; do
     esac
 done
 
-CKPT_DIR=${GIT_ROOT}/ckpts-sync-2/$GUEST_SCRIPT
+CKPT_DIR=${GIT_ROOT}/ckpts-palloc-2bins-320wss/$GUEST_SCRIPT
 
 function run_simulation {
     if [ ${#BANK_BWS[@]} -gt 0 ] && [ ${#BANK_BWS[@]} -ne $NUM_BANKS ]; then
@@ -184,7 +184,7 @@ function run_simulation {
 
     # Set up simulation parameters
     if [[ -n "$checkpoint" ]]; then
-        RUNDIR=${GIT_ROOT}/ckptDir/$GUEST_SCRIPT-sync-2
+        RUNDIR=${GIT_ROOT}/ckptDir/$GUEST_SCRIPT-palloc-2bins-320wss
         GEM5TYPE="fast"
         CPUTYPE="AtomicSimpleCPU"
         EXTRA_CONFIG="--max-checkpoints 2 --cpu-type=$CPUTYPE"
@@ -231,7 +231,7 @@ function run_simulation {
             BUS_INFO="-withlatency"
         fi
 
-        RUNDIR=${GIT_ROOT}/runDir/$GUEST_SCRIPT-sync-2
+        RUNDIR=${GIT_ROOT}/runDir/$GUEST_SCRIPT-palloc-2bins-320wss
         RESTORE_CPU="ArmO3CPU"  # CPU to restore from checkpoint with
         SWITCH_CPU="ArmO3CPU"          # CPU to switch to at workbegin
         GEM5TYPE="fast"
@@ -265,7 +265,7 @@ function run_simulation {
         --num-l2caches=1 \
         --mem-type=DDR4_2400_16x4 \
         --mem-channels=1 \
-        --mem-size=2048MB \
+        --mem-size=4096MB \
         --script="$GIT_ROOT/$GUEST_SCRIPT_DIR/$GUEST_SCRIPT" \
         --checkpoint-dir="$CKPT_DIR" \
         --cpu-clock=$Freq \
