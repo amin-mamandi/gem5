@@ -6,7 +6,7 @@ export GIT_ROOT=$(pwd)
 # Common parameters
 COMMON_PARAMS="--num-cpus 4 --take-checkpoint"
 # Base directory for checkpoints 
-CKPT_BASE_DIR="$GIT_ROOT/ckpts-palloc-2bins-320wss"
+CKPT_BASE_DIR="$GIT_ROOT/checkpoints/ckpts-palloc-4bins-new"
 REQUIRED_CHECKPOINT=3  # We need 3 checkpoint directories
 
 # Define script patterns for read operations
@@ -259,7 +259,7 @@ run_simulations() {
         
         # Run the script with the appropriate directory
         # Set the checkpoint directory structure properly
-        ckpt_dir_param="--checkpoint-dir ${GIT_ROOT}/ckpts-palloc-2bins-320wss/${script%.sh}"
+        ckpt_dir_param="--checkpoint-dir ${GIT_ROOT}/checkpoints/ckpts-palloc-2bins/${script%.sh}"
         
         ./ckpt.sh $COMMON_PARAMS $bank_params --script-dir "$script_dir" --script "$script" $ckpt_dir_param $latency_param &
         pid=$!

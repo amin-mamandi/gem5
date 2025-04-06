@@ -164,7 +164,7 @@ while true; do
     esac
 done
 
-CKPT_DIR=${GIT_ROOT}/ckpts-palloc-2bins-320wss/$GUEST_SCRIPT
+CKPT_DIR=${GIT_ROOT}/checkpoints/ckpts-palloc-4bins/$GUEST_SCRIPT
 RUNDIR=""
 
 function setup_dirs {
@@ -176,7 +176,7 @@ function setup_dirs {
 
 # Setup RUNDIR based on parameters outside of run_simulation
 if [[ -n "$checkpoint" ]]; then
-    RUNDIR=${GIT_ROOT}/ckptDir/$GUEST_SCRIPT-palloc-2bins-320wss
+    RUNDIR=${GIT_ROOT}/ckptDir/$GUEST_SCRIPT-palloc-4bins
 else
     # Create descriptive directory name including bank configs
     BANK_INFO=""
@@ -199,7 +199,7 @@ else
         MSHR_INFO=""
     fi
     
-    RUNDIR=${GIT_ROOT}/runDir-3/$GUEST_SCRIPT-palloc-2bins-320wss
+    RUNDIR=${GIT_ROOT}/runDir-new/$GUEST_SCRIPT-palloc-4bins-cflDelay-256mshrs-unlockedTags
 fi
 
 function run_simulation {
@@ -259,6 +259,7 @@ function run_simulation {
         --param=system.l2.enable_bw_regulation=False \
         --param=system.l2.num_banks=4 \
         --param=system.l2.bank_intlv_high_bit=7 \
+        --param=system.l2.unlocked_tags=False \
         --param=system.l2.monitor_window=$MONITOR_WINDOW \
         --param=system.cpu[:].icache.enable_banks=False \
         --param=system.cpu[:].dcache.enable_banks=False \

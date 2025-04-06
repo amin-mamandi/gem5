@@ -167,7 +167,7 @@ while true; do
     esac
 done
 
-CKPT_DIR=${GIT_ROOT}/ckpts-palloc-2bins-320wss/$GUEST_SCRIPT
+CKPT_DIR=${GIT_ROOT}/checkpoints/ckpts-palloc-4bins-new/$GUEST_SCRIPT
 
 function run_simulation {
     if [ ${#BANK_BWS[@]} -gt 0 ] && [ ${#BANK_BWS[@]} -ne $NUM_BANKS ]; then
@@ -184,7 +184,7 @@ function run_simulation {
 
     # Set up simulation parameters
     if [[ -n "$checkpoint" ]]; then
-        RUNDIR=${GIT_ROOT}/ckptDir/$GUEST_SCRIPT-palloc-2bins-320wss
+        RUNDIR=${GIT_ROOT}/ckptDir/$GUEST_SCRIPT-palloc-4bins-new
         GEM5TYPE="fast"
         CPUTYPE="AtomicSimpleCPU"
         EXTRA_CONFIG="--max-checkpoints 2 --cpu-type=$CPUTYPE"
@@ -231,7 +231,7 @@ function run_simulation {
             BUS_INFO="-withlatency"
         fi
 
-        RUNDIR=${GIT_ROOT}/runDir/$GUEST_SCRIPT-palloc-2bins-320wss
+        RUNDIR=${GIT_ROOT}/runDir/$GUEST_SCRIPT-palloc-4bins-new
         RESTORE_CPU="ArmO3CPU"  # CPU to restore from checkpoint with
         SWITCH_CPU="ArmO3CPU"          # CPU to switch to at workbegin
         GEM5TYPE="fast"
