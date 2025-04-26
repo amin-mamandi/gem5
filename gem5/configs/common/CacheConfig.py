@@ -177,37 +177,37 @@ def config_cache(options, system):
             fatal("The number of L2 caches must be a submultiple of the ",
                   "number of cores.")
         ##########################################
-        num_cores = 4
-        total_ways = 16  # Assuming assoc=16
-        ways_for_core0 = total_ways // 2  # Half of the ways
-        remaining_ways = [w for w in range(ways_for_core0, total_ways)]  # Remaining ways for sharing
+        # num_cores = 4
+        # total_ways = 16  # Assuming assoc=16
+        # ways_for_core0 = total_ways // 2  # Half of the ways
+        # remaining_ways = [w for w in range(ways_for_core0, total_ways)]  # Remaining ways for sharing
 
-        # Create allocation for core 0
-        core0_ways = [w for w in range(0, ways_for_core0)]
-        allocations = [
-            WayPolicyAllocation(
-                partition_id=0,
-                ways=core0_ways
-            )
-        ]
+        # # Create allocation for core 0
+        # core0_ways = [w for w in range(0, ways_for_core0)]
+        # allocations = [
+        #     WayPolicyAllocation(
+        #         partition_id=0,
+        #         ways=core0_ways
+        #     )
+        # ]
 
-        # Create a single shared allocation for all other cores
-        # Each of the other cores (cores 1, 2, and 3) will have the same partition_id (1)
-        # This means they all share the same set of ways
-        allocations.append(
-            WayPolicyAllocation(
-                partition_id=1,  # All other cores will use this partition ID
-                ways=remaining_ways
-            )
-        )
+        # # Create a single shared allocation for all other cores
+        # # Each of the other cores (cores 1, 2, and 3) will have the same partition_id (1)
+        # # This means they all share the same set of ways
+        # allocations.append(
+        #     WayPolicyAllocation(
+        #         partition_id=1,  # All other cores will use this partition ID
+        #         ways=remaining_ways
+        #     )
+        # )
 
-        # Create partitioning policy
-        policy = WayPartitioningPolicy(allocations=allocations)
+        # # Create partitioning policy
+        # policy = WayPartitioningPolicy(allocations=allocations)
 
-        # Create partition manager
-        partition_manager = PartitionManager(
-            partitioning_policies=[policy]
-        )
+        # # Create partition manager
+        # partition_manager = PartitionManager(
+        #     partitioning_policies=[policy]
+        # )
         ##########################################
 
         # Define capacity partitioning
@@ -239,7 +239,6 @@ def config_cache(options, system):
         # same clock as the CPUs.
         system.l2 = l2_cache_class(
             clk_domain=system.cpu_clk_domain, 
-            partitioning_manager=partition_manager,
             **_get_cache_opts("l2", options)
         )
         # if options.num_cpus > 1:

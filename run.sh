@@ -4,7 +4,7 @@
 export GIT_ROOT=$(pwd)
 GEM5_DIR=${GIT_ROOT}/gem5
 GUEST_SCRIPT_DIR=${GIT_ROOT}/guest-scripts
-RESOURCES=${GIT_ROOT}/resources-palloc
+RESOURCES=${GIT_ROOT}/resources-riscv
 RUNDIR_BASE="${GIT_ROOT}/rundir"
 
 # Default parameters based on ARM Cortex-A72
@@ -199,7 +199,7 @@ else
         MSHR_INFO=""
     fi
     
-    RUNDIR=${GIT_ROOT}/runDir-new/$GUEST_SCRIPT-palloc-4bins-cflDelay-256mshrs-unlockedTags
+    RUNDIR=${GIT_ROOT}/runDir-new17April/$GUEST_SCRIPT
 fi
 
 function run_simulation {
@@ -260,6 +260,7 @@ function run_simulation {
         --param=system.l2.num_banks=4 \
         --param=system.l2.bank_intlv_high_bit=7 \
         --param=system.l2.unlocked_tags=False \
+        --param=system.l2.cfl_delay=False \
         --param=system.l2.monitor_window=$MONITOR_WINDOW \
         --param=system.cpu[:].icache.enable_banks=False \
         --param=system.cpu[:].dcache.enable_banks=False \

@@ -149,13 +149,6 @@ WriteQueueEntry::sendPacket(BaseCache &cache)
     return cache.sendWriteQueuePacket(this);
 }
 
-void
-WriteQueueEntry::delayPacket(BaseCache &cache, Tick delay_ticks)
-{
-    return cache.delayWriteQueuePacket(this, delay_ticks);
-}
-
-
 bool
 WriteQueueEntry::matchBlockAddr(const Addr addr, const bool is_secure) const
 {

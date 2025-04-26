@@ -1,0 +1,36 @@
+Cache size:
+    L1 I-cache: 64 KB, 8-way
+    L1 D-cache: 64 KB, 8-way
+    L2 shared cache: 2 MB, 16-way
+
+Cache line size: 64 Bytes
+
+Index bits:
+    L1: 7 bits ("P")
+    L2: 11 bits ("S")
+
+Offset bits: 6 bits ("O")
+
+Address bits:
+20|19|18|17|16|15|14|13    |12|11|10|9|8|7|6|5|4|3|2|1|0
+                             P  P  P P P P P O O O O O O
+             S  S  S  S      S  S  S S S S S O O O O O O
+
+
+PALLOC:
+
+2 bins created for the l2 cache 
+
+mkdir /sys/fs/cgroup/palloc/part1
+mkdir /sys/fs/cgroup/palloc/part2
+ 
+echo 4 > /sys/kernel/debug/palloc/alloc_balance
+echo 1 > /sys/kernel/debug/palloc/use_palloc
+echo 0x8000 > /sys/kernel/debug/palloc/palloc_mask
+
+echo 0 > /sys/fs/cgroup/palloc/part1/palloc.bins
+echo 1 > /sys/fs/cgroup/palloc/part2/palloc.bins
+
+echo $pid-attacker > /sys/fs/cgroup/palloc/part1/cgroup.procs
+echo $pid-victim > /sys/fs/cgroup/palloc/part2/cgroup.procs
+

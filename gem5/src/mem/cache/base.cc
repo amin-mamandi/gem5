@@ -92,7 +92,7 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
       memSidePort(p.name + ".mem_side_port", this, "MemSidePort"),
       accessor(*this),
       banks(p.num_banks),
-      mshrQueue("MSHRs", p.mshrs, 0, p.demand_mshr_reserve, p.name),
+      mshrQueue("MSHRs", p.mshrs, 0, p.demand_mshr_reserve, p.name, p.num_banks, p.enable_banks),
       writeBuffer("write buffer", p.write_buffers, p.mshrs, p.name),
       tags(p.tags),
       compressor(p.compressor),
@@ -226,6 +226,33 @@ BaseCache::logBankOutOfService(Tick time)
 }
 
 void
+BaseCache::Bank::setBlockedCause(BlockedCause cause)
+{
+    // If bank is already busy, extend the service time
+    if (inService) {
+        // Add a small delay to ensure we don't process requests too soon
+        extendService(owner.ticksToCycles(1));
+        printf("Bank %d already busy, extending service for blocked cause %d\n", 
+                bankId, cause);
+    } else {
+        // Mark the bank in service until a future tick
+        Tick blockUntil = curTick() + owner.cyclesToTicks(Cycles(1));
+        markInService(blockUntil, Busy_ReadPkt_CpuSidePort);
+        printf("Bank %d blocked for cause %d until tick %ld\n", 
+                bankId, cause, blockUntil);
+    }
+    
+    // Set the retry flag to ensure we retry when bank becomes available
+    setRetryFlag();
+    
+    // Update owner's blocked state if appropriate
+    if (cause == Blocked_NoMSHRs) {
+        // No need to set global blocked state since this is per-bank
+        printf("Bank %d has no MSHRs available\n", bankId);
+    }
+}
+
+void
 BaseCache::Bank::processUpdateBusy()
 {
     assert(inService);
@@ -323,6 +350,8 @@ void
 BaseCache::Bank::setConflict()
 {
     conflict = true;
+    DPRINTF(CacheBank, "Bank %d conflict detected at tick %ld from state %d\n", 
+        bankId, curTick(), busyCause);
 }
 
 void
@@ -1017,25 +1046,6 @@ void
 BaseCache::functionalAccess(PacketPtr pkt, bool from_cpu_side)
 {
     Addr blk_addr = pkt->getBlockAddr(blkSize);
-
-    if (pkt->cmd == MemCmd::CacheBankQuery)
-    {
-        typedef std::pair<PacketPtr, Tick> Payload;
-        Payload data = pkt->getLE<Payload>();
-        if (enableBanks && cflDelay && checkDataArrayAccess(data.first))
-        {
-            unsigned bank_id = getBankId(blk_addr);
-            if (banks[bank_id]->isBusy())
-            {
-                // Set the delay
-                data.second = banks[bank_id]->finishTick() + 1 - curTick();
-                // Rewrite the packet payload
-                pkt->setLE<Payload>(data);
-            }
-        }
-        pkt->makeResponse();
-        return;
-    }
 
     bool is_secure = pkt->isSecure();
     CacheBlk *blk = tags->findBlock(pkt->getAddr(), is_secure);
@@ -2409,12 +2419,6 @@ BaseCache::sendWriteQueuePacket(WriteQueueEntry* wq_entry)
 }
 
 void
-BaseCache::delayWriteQueuePacket(WriteQueueEntry* wq_entry, Tick delay_ticks)
-{
-    writeBuffer.delay(wq_entry, delay_ticks);
-}
-
-void
 BaseCache::serialize(CheckpointOut &cp) const
 {
     bool dirty(isDirty());
@@ -3237,6 +3241,13 @@ BaseCache::CpuSidePort::tryTiming(PacketPtr pkt)
     bool doNotBlock = cache.unlockedTags && !dataArrayAccess;
     unsigned bank_id = cache.getBankId(blk_addr);
     bool bank_busy = cache.enableBanks && cache.banks[bank_id]->isBusy();
+    // Check if this bank's MSHRs are full
+    bool bank_mshr_full = cache.enableBanks && cache.isBankMSHRFull(bank_id);
+    if (cache.enableBanks && bank_mshr_full){
+        // printf("bank %d is mshr full\n",
+        //      bank_id);
+    }
+
     // bool bank_bw_blocked = cache.enableBanks && cache.bwRegulationEnabled && cache.banks[bank_id]->isBwBlocked();
 
     if (cache.system->bypassCaches() || pkt->isExpressSnoop()) {
@@ -3520,22 +3531,12 @@ BaseCache::CacheReqPacketQueue::sendDeferredPacket()
         // before the retry, the writeback is eliminated because
         // we snoop another cache's ReadEx.
     } else {
-        PacketPtr pkt = entry->getTarget()->pkt;
-
         // let our snoop responses go first if there are responses to
         // the same addresses
-        if (checkConflictingSnoop(pkt)) {
+        if (checkConflictingSnoop(entry->getTarget()->pkt)) {
             return;
         }
-
-        Tick delay = cache.nextLevelBankDelay(pkt);
-        if (!delay) {
-            waitingOnRetry = entry->sendPacket(cache);
-        } else {
-            DPRINTF(CacheBank, "%s: delaying %s by %lu ticks\n",
-                    __func__, pkt->print(), delay);
-            entry->delayPacket(cache, delay);
-        }
+        waitingOnRetry = entry->sendPacket(cache);
     }
 
     // if we succeeded and are not waiting for a retry, schedule the

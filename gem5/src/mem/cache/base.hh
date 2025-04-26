@@ -244,6 +244,12 @@ class BaseCache : public ClockedObject
 
       public:
 
+        /*
+        * Set the bank as blocked for a specific cause
+        * @param cause The reason for blocking the bank
+        */
+        void setBlockedCause(BlockedCause cause);
+
         void setBudget(unsigned budget) { reqBudget = budget; }
         
         unsigned getId() const { return bankId; }
@@ -686,31 +692,6 @@ class BaseCache : public ClockedObject
         }
     }
 
-    /**
-     * Send a functional packet downstream to check if a request can be
-     * accepted immediately or has to be delayed (the bank is busy)
-     *
-     * @param pkt The packet containing the request
-     * @return The delay to apply to the request
-     */
-    Tick nextLevelBankDelay(PacketPtr pkt)
-    {
-        assert(pkt);
-        typedef std::pair<PacketPtr, Tick> Payload;
-        Payload data(pkt, 0);
-        RequestPtr q_req = std::make_shared<Request>(pkt->getAddr(),
-                                                     sizeof(Payload), 0,
-                                                     Request::funcRequestorId);
-        PacketPtr q_pkt = new Packet(q_req, MemCmd::CacheBankQuery);
-        q_pkt->allocate();
-        q_pkt->setLE<Payload>(data);
-        memSidePort.sendFunctional(q_pkt);
-        data = q_pkt->getLE<Payload>();
-        delete q_pkt;
-
-        return data.second;
-    }
-    
     /**
      * Determine whether we should allocate on a fill or not. If this
      * cache is mostly inclusive with regards to the upstream cache(s)
@@ -1577,10 +1558,19 @@ class BaseCache : public ClockedObject
 
     MSHR *allocateMissBuffer(PacketPtr pkt, Tick time, bool sched_send = true)
     {
+
+        // Get bank ID if banks are enabled
+        unsigned bank_id = enableBanks ? getBankId(pkt->getBlockAddr(blkSize)) : 0;
+
+        // Check if this bank has reached its MSHR limit
+        if (enableBanks && mshrQueue.isBankFull(bank_id)) {
+            // Either block globally or handle specially
+            return nullptr;  // Or handle this case differently
+        }
+        
         MSHR *mshr = mshrQueue.allocate(pkt->getBlockAddr(blkSize), blkSize,
                                         pkt, time, order++,
-                                        allocOnFill(pkt->cmd));
-
+                                        allocOnFill(pkt->cmd), bank_id);
         if (mshrQueue.isFull()) {
             setBlocked((BlockedCause)MSHRQueue_MSHRs);
         }
@@ -1701,6 +1691,11 @@ class BaseCache : public ClockedObject
         return mshrQueue.findMatch(addr, is_secure);
     }
 
+    bool isBankMSHRFull(unsigned bank_id) const
+    {
+        return mshrQueue.isBankFull(bank_id);
+    }
+
     void incMissCount(PacketPtr pkt)
     {
         assert(pkt->req->requestorId() < system->maxRequestors());
@@ -1777,16 +1772,6 @@ class BaseCache : public ClockedObject
      * @return True if the port is waiting for a retry
      */
     bool sendWriteQueuePacket(WriteQueueEntry* wq_entry);
-
-    /**
-     * Similar to delayMSHR, but for a write-queue entry
-     * instead.
-     *
-     * @param wq_entry The write-queue entry to delay
-     * @param delay_ticks The additional time in ticks
-     */
-    virtual void delayWriteQueuePacket(WriteQueueEntry* wq_entry,
-                                       Tick delay_ticks);
 
     /**
      * Serialize the state of the caches

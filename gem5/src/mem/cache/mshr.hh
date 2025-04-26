@@ -74,6 +74,7 @@ class BaseCache;
 class MSHR : public QueueEntry, public Printable
 {
     int coreId; // Core ID associated with this MSHR
+    int bankId; // Bank ID associated with this MSHR
 
     /**
      * Consider the queues friends to avoid making everything public.
@@ -85,6 +86,8 @@ class MSHR : public QueueEntry, public Printable
   public:
     void setCoreID(int id) { coreId = id; }
     int getCoreID() const { return coreId; }
+    void setBankID(int id) { bankId = id; }
+    int getBankID() const { return bankId; }
 
   private:
 
@@ -341,7 +344,6 @@ class MSHR : public QueueEntry, public Printable
     }
 
     bool sendPacket(BaseCache &cache) override;
-    void delayPacket(BaseCache &cache, Tick delay_ticks) override;
 
     bool allocOnFill() const {
         return targets.allocOnFill;

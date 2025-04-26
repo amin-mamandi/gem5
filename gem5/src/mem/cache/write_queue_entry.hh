@@ -99,7 +99,6 @@ class WriteQueueEntry : public QueueEntry, public Printable
     typedef List::iterator Iterator;
 
     bool sendPacket(BaseCache &cache) override;
-    void delayPacket(BaseCache &cache, Tick delay_ticks) override;
 
   private:
 

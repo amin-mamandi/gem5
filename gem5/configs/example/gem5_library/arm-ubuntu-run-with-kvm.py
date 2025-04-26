@@ -127,12 +127,12 @@ command = (
 # ARM KVM.
 board.set_kernel_disk_workload(
     kernel=KernelResource(
-        local_path="/home/RTAS2025/resources-palloc/vmlinux"
+        local_path="/home/RTAS2025/kernel6/vmlinux"
     ),
     disk_image=DiskImageResource(
-        local_path="/home/RTAS2025/resources-palloc/rootfs.ext2"
+        local_path="/home/RTAS2025/kernel6/rootfs.ext2"
     ),
-    bootloader=BootloaderResource(local_path="/home/RTAS2025/resources-palloc/boot.arm64"),
+    bootloader=BootloaderResource(local_path="/home/RTAS2025/resources-palloc-nops/boot.arm64"),
     readfile_contents=command
 )
 

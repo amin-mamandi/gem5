@@ -1,4 +1,6 @@
 runDir*
+checkpoints/*
+runDir-3
 m5out*
 resources-*
 ckpts*

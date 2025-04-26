@@ -114,7 +114,7 @@ def create_slowdown_plot():
             solo_read_baseline[size] = None
     
     # Process data for diff configurations (read)
-    x_offset = -0.3  # Start offset for positioning
+    x_offset = -0.5  # Start offset for positioning
     for i, attack in enumerate(diff_attack_nums):
         slowdown_values = []
         for size in sizes:
@@ -198,7 +198,7 @@ def create_slowdown_plot():
     # We still compare against solo-read as requested
     
     # Process data for diff configurations (write)
-    x_offset = -0.3  # Reset offset for positioning
+    x_offset = -0.5  # Reset offset for positioning
     for i, attack in enumerate(diff_attack_nums):
         slowdown_values = []
         for size in sizes:
@@ -282,6 +282,11 @@ def create_slowdown_plot():
     ax_read.axhline(y=1, color='black', linestyle='--', alpha=0.7)
     ax_write.axhline(y=1, color='black', linestyle='--', alpha=0.7)
     
+    # Add vertical lines between size groups
+    for i in range(1, len(indices)):
+        ax_read.axvline(x=i - 0.5, color='gray', linestyle='--', alpha=0.5)
+        ax_write.axvline(x=i - 0.5, color='gray', linestyle='--', alpha=0.5)
+    
     # Configure read slowdown plot
     ax_read.set_title('Read Performance Slowdown Relative to Solo (Higher is Worse)')
     ax_read.set_xlabel('Size')
@@ -325,7 +330,7 @@ def create_slowdown_plot():
     fig_combined, ax_combined = plt.subplots(figsize=(16, 8))
     
     # Set new positions for combined plot
-    x_offset = -0.4
+    x_offset = -0.44
     bar_width = 0.08
     
     # Create labels for the legend
@@ -362,7 +367,13 @@ def create_slowdown_plot():
                 valid_positions.append(indices[idx] + x_offset)
                 valid_slowdowns.append(val)
         
-        pattern = '' if i % 2 == 0 else '/'
+        if i % 3 == 0:
+            pattern = ''
+        elif i % 3 == 1:
+            pattern = '/'
+        else:  # i % 3 == 2
+            pattern = '-'
+        # pattern = '--' if i % 2 == 0 else '/'
         bar = ax_combined.bar(valid_positions, valid_slowdowns, bar_width, 
                         color=combined_cmap(color_index), 
                         hatch=pattern, edgecolor='black', linewidth=0.5)
@@ -486,6 +497,10 @@ def create_slowdown_plot():
     
     # Add reference line
     ax_combined.axhline(y=1, color='black', linestyle='--', alpha=0.7)
+    
+    # Add vertical lines between size groups
+    for i in range(1, len(indices)):
+        ax_combined.axvline(x=i - 0.5, color='gray', linestyle='--', alpha=0.5)
     
     # Configure combined plot
     ax_combined.set_title('Performance Slowdown Relative to Solo (Higher is Worse)')
