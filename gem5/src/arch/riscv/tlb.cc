@@ -53,6 +53,7 @@
 #include "sim/full_system.hh"
 #include "sim/process.hh"
 #include "sim/system.hh"
+#include "debug/TLBMy.hh"
 
 namespace gem5
 {
@@ -156,6 +157,15 @@ TLB::insert(Addr vpn, const TlbEntry &entry)
         vpn, entry.asid, buildKey(vpn, entry.asid), entry.vaddr, entry.paddr,
         entry.pte, entry.size());
 
+    if (entry.deterministic) {
+        DPRINTF(TLBInsertMy, "TLB insert == vpn=0x%05x vaddr=0x%016x paddr=0x%016x "
+                "asid=%d size=0x%x pte_details={mt=0x%x rsw=%d v=%d r=%d w=%d x=%d "
+                "u=%d g=%d a=%d d=%d ppn=0x%09x}\n",
+                vpn, entry.vaddr, entry.paddr, entry.asid, entry.size(), 
+                entry.pte.mt, entry.pte.rsw, entry.pte.v, entry.pte.r, entry.pte.w, 
+                entry.pte.x, entry.pte.u, entry.pte.g, entry.pte.a, entry.pte.d, 
+                entry.pte.ppn);
+    }
     // If somebody beat us to it, just use that existing entry.
     TlbEntry *newEntry = lookup(vpn, entry.asid, BaseMMU::Read, true);
     if (newEntry) {
@@ -342,6 +352,28 @@ TLB::doTranslate(const RequestPtr &req, ThreadContext *tc,
         }
         if (fault != NoFault)
             return fault;
+    }
+
+    if (e->isDetMemory()) 
+    {
+
+        uint64_t oldFlags = req->getFlags();
+        req->setFlags(req->getFlags() | Request::DETERMINISTIC);
+        req->setFlags(req->getFlags() | Request::STRICT_ORDER);
+        req->setFlags(req->getFlags() | Request::UNCACHEABLE);
+
+        uint64_t newFlags = req->getFlags();
+        
+        DPRINTF(TLBMy, "TLB setting DETERMINISTIC flag for addr %#x: flags %#x -> %#x, isDeterministic=%d\n", 
+                vaddr, oldFlags, newFlags, req->isDeterministic());
+        
+        DPRINTF(TLBMy, "doTranslate == vaddr=0x%016x paddr=0x%016x mode=%s vpn=0x%05x "
+            "asid=%d size=%x pc=0x%08x rsw=%d\n", 
+            vaddr, (e->paddr << PageShift | (vaddr & mask(e->logBytes))),
+            (mode == BaseMMU::Read) ? "READ" : 
+            (mode == BaseMMU::Write) ? "WRITE" : "EXECUTE",
+            getVPNFromVAddr(vaddr, satp.mode), 
+            satp.asid, e->size(), req->getPC(), e->pte.rsw);
     }
 
     Addr paddr = e->paddr << PageShift | (vaddr & mask(e->logBytes));

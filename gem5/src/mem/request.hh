@@ -187,6 +187,8 @@ class Request : public Extensible<Request>
         /** The request is a page table walk */
         PT_WALK                     = 0x20000000,
 
+        DETERMINISTIC              = 0x0001000000000000,
+
         /** The request invalidates a memory location */
         INVALIDATE                  = 0x0000000100000000,
         /** The request cleans a memory location */
@@ -1010,6 +1012,7 @@ class Request : public Extensible<Request>
 
     /** Accessor functions for flags. Note that these are for testing
         only; setting flags should be done via setFlags(). */
+    bool isDeterministic() const { return _flags.isSet(DETERMINISTIC); }
     bool isUncacheable() const { return _flags.isSet(UNCACHEABLE); }
     bool isStrictlyOrdered() const { return _flags.isSet(STRICT_ORDER); }
     bool isInstFetch() const { return _flags.isSet(INST_FETCH); }

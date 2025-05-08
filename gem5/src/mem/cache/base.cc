@@ -51,6 +51,7 @@
 #include "base/compiler.hh"
 #include "base/logging.hh"
 #include "debug/Cache.hh"
+#include "debug/MyCache.hh"
 #include "debug/CacheComp.hh"
 #include "debug/CachePort.hh"
 #include "debug/CacheRepl.hh"
@@ -620,6 +621,10 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
 void
 BaseCache::recvTimingReq(PacketPtr pkt)
 {
+    if(pkt->req->isDeterministic()){
+        DPRINTF(MyCache, "Deterministic request %s\n", pkt->print());
+    }
+
     // anything that is merely forwarded pays for the forward latency and
     // the delay provided by the crossbar
     Tick forward_time = clockEdge(forwardLatency) + pkt->headerDelay;

@@ -47,9 +47,10 @@ from gem5.components.memory import SingleChannelDDR3_1600
 from gem5.components.processors.cpu_types import CPUTypes
 from gem5.components.processors.simple_processor import SimpleProcessor
 from gem5.isas import ISA
-from gem5.resources.resource import obtain_resource
+from gem5.resources.resource import obtain_resource, DiskImageResource, KernelResource, BootloaderResource
 from gem5.simulate.simulator import Simulator
 from gem5.utils.requires import requires
+from pathlib import Path
 
 # Run a check to ensure the right version of gem5 is being used.
 requires(isa_required=ISA.RISCV)
@@ -76,13 +77,21 @@ board = RiscvBoard(
     memory=memory,
     cache_hierarchy=cache_hierarchy,
 )
+command = (
+    "./program --ndmpgs 2 --addr 0x3f95b7e000;"
+)
 
 # Set the Full System workload.
 board.set_kernel_disk_workload(
-    kernel=obtain_resource(
-        "riscv-bootloader-vmlinux-5.10", resource_version="1.0.0"
+    kernel=KernelResource(
+        local_path="/home/RTAS2025/resources-riscv/vmlinux"
     ),
-    disk_image=obtain_resource("riscv-disk-img", resource_version="1.0.0"),
+    disk_image=DiskImageResource(
+        local_path="/home/RTAS2025/resources-riscv/connor.img"
+    ),
+    bootloader=BootloaderResource(local_path="/home/RTAS2025/resources-riscv/connor-bin"),
+    readfile_contents=command,
+    checkpoint=Path("/home/RTAS2025/gem5/m5out/cpt.5259946502000")
 )
 
 simulator = Simulator(board=board)

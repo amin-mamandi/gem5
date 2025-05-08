@@ -100,10 +100,10 @@ MSHRQueue::allocate(Addr blk_addr, unsigned blk_size, PacketPtr pkt,
         //         bank_id, current, maxMSHRsPerBank);
                 
         // Log a warning if approaching theoretical limit
-        if (current >= maxMSHRsPerBank - 1) {
-            printf("Warning: Bank %d approaching MSHR limit (%d/%d)\n",
-                    bank_id, current, maxMSHRsPerBank);
-        }
+        // if (current >= maxMSHRsPerBank - 1) {
+        //     printf("Warning: Bank %d approaching MSHR limit (%d/%d)\n",
+        //             bank_id, current, maxMSHRsPerBank);
+        // }
     }
 
     // Track bank ID but don't enforce limits

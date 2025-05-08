@@ -53,6 +53,8 @@
 #include "sim/clocked_object.hh"
 #include "sim/faults.hh"
 #include "sim/system.hh"
+#include "debug/TLBInsert.hh"
+#include "debug/TLBInsertMy.hh"
 
 namespace gem5
 {

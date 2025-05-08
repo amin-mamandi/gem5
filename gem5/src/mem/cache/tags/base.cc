@@ -259,7 +259,13 @@ BaseTags::BaseTagStats::BaseTagStats(BaseTags &_tags)
     ADD_STAT(tagAccesses, statistics::units::Count::get(),
              "Number of tag accesses"),
     ADD_STAT(dataAccesses, statistics::units::Count::get(),
-             "Number of data accesses")
+             "Number of data accesses"),
+    ADD_STAT(determ_replacements, statistics::units::Count::get(),
+             "Number of deterministic replacements"),
+    ADD_STAT(determ_blks, statistics::units::Count::get(),
+             "Number of deterministic blocks"),
+    ADD_STAT(avg_determ_blks, statistics::units::Count::get(),
+             "Average number of deterministic blocks")
 {
 }
 
@@ -302,6 +308,30 @@ BaseTags::BaseTagStats::regStats()
     ratioOccsTaskId.flags(nozero);
 
     ratioOccsTaskId = occupanciesTaskId / statistics::constant(tags.numBlocks);
+
+    determ_replacements
+        .init(system->maxRequestors())
+        .flags(nozero | nonan)
+        ;
+    for (int i = 0; i < system->maxRequestors(); i++) {
+        determ_replacements.subname(i, system->getRequestorName(i));
+    }
+
+    determ_blks
+        .init(system->maxRequestors())
+        .flags(nozero | nonan)
+        ;
+    for (int i = 0; i < system->maxRequestors(); i++) {
+        determ_blks.subname(i, system->getRequestorName(i));
+    }
+
+    avg_determ_blks
+        .init(system->maxRequestors())
+        .flags(nozero | nonan)
+        ;
+    for (int i = 0; i < system->maxRequestors(); i++) {
+        avg_determ_blks.subname(i, system->getRequestorName(i));
+    }
 }
 
 void

@@ -152,7 +152,7 @@ class Queue : public Drainable, public Named
 
     bool isFull() const
     {
-        return (allocated >= numEntries - numReserve);
+        return (allocated > numEntries - numReserve);
     }
 
     int numInService() const

@@ -176,7 +176,7 @@ function setup_dirs {
 
 # Setup RUNDIR based on parameters outside of run_simulation
 if [[ -n "$checkpoint" ]]; then
-    RUNDIR=${GIT_ROOT}/ckptDir/$GUEST_SCRIPT-palloc-4bins
+    RUNDIR=${GIT_ROOT}/test/$GUEST_SCRIPT-palloc-4bins
 else
     # Create descriptive directory name including bank configs
     BANK_INFO=""
@@ -239,12 +239,11 @@ function run_simulation {
     setup_dirs
     
     echo "Starting gem5 simulation in directory: $RUNDIR"
-    "$GEM5_DIR/build/ARM/gem5.$GEM5TYPE" \
+    "$GEM5_DIR/build/RISCV/gem5.$GEM5TYPE" \
         --outdir="$RUNDIR" \
-        "$GEM5_DIR"/configs/deprecated/example/fs.py \
+        "$GEM5_DIR"/configs/deprecated/example/fs.py -h \
         --kernel="$RESOURCES/vmlinux" \
         --disk="$RESOURCES/rootfs.ext2" \
-        --bootloader="$RESOURCES/boot.arm64" \
         --root=/dev/sda \
         --num-cpus=$num_cpus \
         --num-l2caches=1 \
@@ -253,6 +252,7 @@ function run_simulation {
         --mem-size=4096MB \
         --script="$GIT_ROOT/$GUEST_SCRIPT_DIR/$GUEST_SCRIPT" \
         --checkpoint-dir="$CKPT_DIR" \
+        --bootloader="$RESOURCES/bootloader" \
         --cpu-clock=$Freq \
         $CACHE_CONFIG \
         --param=system.l2.enable_banks=True \
@@ -263,10 +263,8 @@ function run_simulation {
         --param=system.l2.cfl_delay=False \
         --param=system.l2.monitor_window=$MONITOR_WINDOW \
         --param=system.cpu[:].icache.enable_banks=False \
-        --param=system.cpu[:].dcache.enable_banks=False \
-        $BW_CONFIG \
-        $EXTRA_CONFIG \
-        $CPU_CONFIG
+        --param=system.cpu[:].dcache.enable_banks=False 
+
 }
 
 # Make sure RUNDIR exists before attempting redirection

@@ -158,6 +158,10 @@ class BaseTags : public ClockedObject
         statistics::Scalar tagAccesses;
         /** Number of data blocks consulted over all accesses. */
         statistics::Scalar dataAccesses;
+
+        statistics::Vector determ_replacements;
+        statistics::Vector determ_blks;
+        statistics::Vector avg_determ_blks;
     } stats;
 
   public:
@@ -238,6 +242,19 @@ class BaseTags : public ClockedObject
     {
         panic("This tag class does not implement way allocation limit!\n");
     }
+
+    /**
+     * Set deterministic associativity.
+     */
+     virtual void setDmAssoc(bool dmAssocArg)
+     {
+         panic("This tag class does not implement deterministic way allocation limit!\n");
+     }
+     
+     virtual void clearDM(int lowerWay, int upperWay)
+     {
+         panic("This tag class does not implement deterministic bit clearing!\n");
+     }
 
     /**
      * Get the way allocation mask limit.

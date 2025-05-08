@@ -242,6 +242,13 @@ class RequestPort: public Port, public AtomicRequestProtocol,
     /* The timing protocol. */
 
     /**
+     * Attempt to unblock the connected response port's cache.
+     *
+     * @return If the unblock was successful or not.
+     */
+    bool unblockCache();
+
+    /**
      * Attempt to send a timing request to the responder port by calling
      * its corresponding receive function. If the send does not
      * succeed, as indicated by the return value, then the sender must
@@ -510,6 +517,19 @@ class ResponsePort : public Port, public AtomicResponseProtocol,
     }
 
   protected:
+
+    /**
+     * Called by the request port to unblock the cache.
+     * Default implementation returns false, indicating no unblocking occurred.
+     *
+     * @return If the unblock was successful or not.
+     */
+    virtual bool unblockCache()
+    {
+        panic("%s was not expecting to unblock cache\n", name());
+        return false;
+    }
+
     /**
      * Called by the request port to unbind. Should never be called
      * directly.
@@ -594,6 +614,16 @@ RequestPort::sendMemBackdoorReq(const MemBackdoorReq &req,
     try {
         return FunctionalRequestProtocol::sendMemBackdoorReq(
                 _responsePort, req, backdoor);
+    } catch (UnboundPortException) {
+        reportUnbound();
+    }
+}
+
+inline bool
+RequestPort::unblockCache()
+{
+    try {
+        return _responsePort->unblockCache();
     } catch (UnboundPortException) {
         reportUnbound();
     }

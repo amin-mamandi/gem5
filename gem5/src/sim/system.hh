@@ -63,6 +63,7 @@
 #include "sim/se_signal.hh"
 #include "sim/sim_object.hh"
 #include "sim/workload.hh"
+#include "kern/system_events.hh"
 
 namespace gem5
 {
@@ -300,6 +301,21 @@ class System : public SimObject, public PCEventScope
      * @param mode Mode to change to (atomic/timing/...)
      */
     void setMemoryMode(enums::MemoryMode mode);
+
+    
+    void setMshr(uint8_t cpu_id, int mshrcount);
+
+    int  getmshrCount(uint8_t cpu_id);
+
+    void  setMemBudget(uint8_t cpu_id, uint64_t budget);
+    uint64_t  getMemBudget(uint8_t cpuid);
+    void  resetMemBudget(uint8_t cpu_id);
+    void enableMemGuard(int use);
+    bool isGuarded();
+    void setWayPartMode(int use);
+    int getWayPartMode();
+    void clearDM(int cpu_id);
+
     /** @} */
 
     /**
@@ -407,6 +423,15 @@ class System : public SimObject, public PCEventScope
 
     const Addr _cacheLineSize;
 
+    int mshrCount[4];
+
+    /**
+     * 0: partitioning disabled
+     * 1: simple Way-based partitioning
+     * 2: deterministic memory replacement policy
+    */
+     int wayPartMode;
+
     uint64_t workItemsBegin = 0;
     uint64_t workItemsEnd = 0;
     uint32_t numWorkIds;
@@ -427,6 +452,16 @@ class System : public SimObject, public PCEventScope
     std::string stripSystemName(const std::string& requestor_name) const;
 
   public:
+
+    uint64_t memoryBudget[4];
+    uint64_t budgetInit[4];
+    uint64_t cycleInit[4];
+    bool guard[4];
+    int use_memguard;
+    bool switched_mshr_count[4];
+    bool clearDmFlag;
+    int clearDmCpuId;
+    uint64_t medusaReservedBankMask;
 
     /**
      * Request an id used to create a request object in the system. All objects
@@ -493,6 +528,31 @@ class System : public SimObject, public PCEventScope
 
     /** Get the number of requestors registered in the system */
     RequestorID maxRequestors() { return requestors.size(); }
+
+    
+    int getCpuId(RequestorID requestor_id)
+    {
+      // Get the requestor name
+      std::string requestorName = getRequestorName(requestor_id);
+      
+      // Use a simpler approach with pairs
+      static const std::pair<std::string, int> cpuPatterns[] = {
+          {"cpu0", 0}, {"cpus0", 0},
+          {"cpu1", 1}, {"cpus1", 1},
+          {"cpu2", 2}, {"cpus2", 2},
+          {"cpu3", 3}, {"cpus3", 3}
+      };
+      
+      // Check if the requestor name contains any of the patterns
+      for (const auto& pair : cpuPatterns) {
+          if (requestorName.find(pair.first) != std::string::npos) {
+              return pair.second;
+          }
+      }
+      
+      // No match found
+      return -1;
+    }
 
   protected:
     /** helper function for getRequestorId */

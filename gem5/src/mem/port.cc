@@ -100,6 +100,7 @@ class DefaultResponsePort : public ResponsePort
     bool tryTiming(PacketPtr) override { blowUp(); }
     bool recvTimingSnoopResp(PacketPtr) override { blowUp(); }
     void recvRespRetry() override { blowUp(); }
+    bool unblockCache() override { blowUp(); }
 
     // Functional protocol.
     void recvFunctional(PacketPtr) override { blowUp(); }
