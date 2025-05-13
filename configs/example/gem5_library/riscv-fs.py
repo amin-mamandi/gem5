@@ -47,7 +47,8 @@ from gem5.components.memory import SingleChannelDDR3_1600
 from gem5.components.processors.cpu_types import CPUTypes
 from gem5.components.processors.simple_processor import SimpleProcessor
 from gem5.isas import ISA
-from gem5.resources.resource import obtain_resource
+from gem5.resources.resource import obtain_resource, DiskImageResource, KernelResource, BootloaderResource # added for passing local paths
+from pathlib import Path
 from gem5.simulate.simulator import Simulator
 from gem5.utils.requires import requires
 
@@ -66,23 +67,31 @@ memory = SingleChannelDDR3_1600()
 
 # Setup a single core Processor.
 processor = SimpleProcessor(
-    cpu_type=CPUTypes.TIMING, isa=ISA.RISCV, num_cores=1
+    cpu_type=CPUTypes.ATOMIC, isa=ISA.RISCV, num_cores=2 # ATOMIC is faster than TIMING 
 )
 
 # Setup the board.
 board = RiscvBoard(
-    clk_freq="1GHz",
+    clk_freq="2GHz",
     processor=processor,
     memory=memory,
     cache_hierarchy=cache_hierarchy,
 )
+command = (
+    "echo "hello world" ;" # Don't know if it's needed
+)
 
 # Set the Full System workload.
 board.set_kernel_disk_workload(
-    kernel=obtain_resource(
-        "riscv-bootloader-vmlinux-5.10", resource_version="1.0.0"
+    kernel=KernelResource(
+        local_path="/path-to-vmlinux"
     ),
-    disk_image=obtain_resource("riscv-disk-img", resource_version="1.0.0"),
+    disk_image=DiskImageResource(
+        local_path="/path-to-myworkload.img"
+    ),
+    bootloader=BootloaderResource(local_path="/path-to-riscv-bootloader"), 
+    readfile_contents=command
+    # checkpoint=Path("/path-to-m5out/cpt.XXX") # Uncomment to load a checkpoint
 )
 
 simulator = Simulator(board=board)
