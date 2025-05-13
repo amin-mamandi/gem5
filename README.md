@@ -6,50 +6,63 @@ This will serve as my custom branch to help with running simulations in gem5 for
 
 * Linux-based operating system (Ubuntu 20.04+ or similar recommended)
 * Standard build tools (gcc, make, etc.)
-* FireMarshal (specifically from the detmem branch)
+* FireMarshal (specifically from the `detmem` branch)
 
 ## How to do this?
 
 ### 1. Clone the FireMarshal Repository (detmem Branch)
-    ```bash
-    git clone https://github.com/amin-mamandi/FireMarshal.git -b detmem
-    cd FireMarshal
-    ```
+
+```bash
+git clone https://github.com/amin-mamandi/FireMarshal.git -b detmem
+cd FireMarshal
+```
 
 ### 2. Set Up FireMarshal
 
-    * Follow FireMarshal's standard setup procedure:
-        * Install FireMarshal dependencies
-            ```bash
-            ./init-submodules.sh
-            ```
+Follow FireMarshal's standard setup procedure:
 
-### 3. Create and Build Your Workload
-    * Create a sample workload or modify an existing one (myworkload.json)
-        ```bash
-        ./marshal build myworkload.json
-        ```
-    * The built workload automatically includes m5ops support, enabling advanced simulation features like:
-        * Checkpointing (m5 checkpoint)
-        * Statistics reset and dump (m5 resetstats)
-
-### 4. Build gem5 for RISC-V Architecture
-    * Clone gem5 if you haven't already
-    ```bash
-    git clone https://github.com/gem5/gem5.git
-    cd gem5
-    ```
-    * Build for RISC-V architecture
-    ```bash
-    scons build/RISCV/gem5.opt -j$(nproc)
-    ```
-### 5. Run Your Workload in gem5
-```bash 
-./build/RISCV/gem5.opt configs/example/gem5_library/riscv-fs.py 
+```bash
+./init-submodules.sh
 ```
 
+### 3. Create and Build Your Workload
+
+Create a sample workload or modify an existing one (`myworkload.json`):
+
+```bash
+./marshal build myworkload.json
+```
+
+The built workload automatically includes `m5ops` support, enabling advanced simulation features like:
+
+* Checkpointing (`m5 checkpoint`)
+* Statistics reset and dump (`m5 resetstats`)
+
+### 4. Build gem5 for RISC-V Architecture
+
+Clone gem5 if you haven't already:
+
+```bash
+git clone https://github.com/gem5/gem5.git
+cd gem5
+```
+
+Build for RISC-V architecture:
+
+```bash
+scons build/RISCV/gem5.opt -j$(nproc)
+```
+
+### 5. Run Your Workload in gem5
+
+```bash
+./build/RISCV/gem5.opt configs/example/gem5_library/riscv-fs.py
+```
+
+## Bootloader
+
+A custom RISC-V bootloader (`riscv-bootloader`) is available in this repository. You can use it for full-system RISCV simulations in gem5.
 
 ## Contributing
-Contributions to improve this integration are welcome. 
 
-
+Contributions to improve this integration are welcome. Feel free to submit issues or pull requests.
