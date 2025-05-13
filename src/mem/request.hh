@@ -187,6 +187,8 @@ class Request : public Extensible<Request>
         /** The request is a page table walk */
         PT_WALK                     = 0x20000000,
 
+        DETERMINISTIC              = 0x0001000000000000,
+
         /** The request invalidates a memory location */
         INVALIDATE                  = 0x0000000100000000,
         /** The request cleans a memory location */
@@ -255,10 +257,7 @@ class Request : public Extensible<Request>
          * These flags are *not* cleared when a Request object is
          * reused (assigned a new address).
          */
-        STICKY_FLAGS = INST_FETCH,
-        /** TLBI_EXT_SYNC_COMP seems to be the largest value
-            of FlagsType, so HAS_NO_ADDR's value is that << 1 */
-        HAS_NO_ADDR                = 0x0001000000000000,
+        STICKY_FLAGS = INST_FETCH
     };
     static const FlagsType STORE_NO_DATA = CACHE_BLOCK_ZERO |
         CLEAN | INVALIDATE;
@@ -473,8 +472,6 @@ class Request : public Extensible<Request>
     /** The cause for HTM transaction abort */
     HtmFailureFaultCause _htmAbortCause = HtmFailureFaultCause::INVALID;
 
-    bool _isGPUFuncAccess;
-
   public:
 
     /**
@@ -495,7 +492,6 @@ class Request : public Extensible<Request>
         _flags.set(flags);
         privateFlags.set(VALID_PADDR|VALID_SIZE);
         _byteEnable = std::vector<bool>(size, true);
-        _isGPUFuncAccess = false;
     }
 
     Request(Addr vaddr, unsigned size, Flags flags,
@@ -505,7 +501,6 @@ class Request : public Extensible<Request>
         setVirt(vaddr, size, flags, id, pc, std::move(atomic_op));
         setContext(cid);
         _byteEnable = std::vector<bool>(size, true);
-        _isGPUFuncAccess = false;
     }
 
     Request(const Request& other)
@@ -1017,10 +1012,10 @@ class Request : public Extensible<Request>
 
     /** Accessor functions for flags. Note that these are for testing
         only; setting flags should be done via setFlags(). */
+    bool isDeterministic() const { return _flags.isSet(DETERMINISTIC); }
     bool isUncacheable() const { return _flags.isSet(UNCACHEABLE); }
     bool isStrictlyOrdered() const { return _flags.isSet(STRICT_ORDER); }
     bool isInstFetch() const { return _flags.isSet(INST_FETCH); }
-    bool hasNoAddr() const { return _flags.isSet(HAS_NO_ADDR); }
     bool
     isPrefetch() const
     {
@@ -1128,17 +1123,6 @@ class Request : public Extensible<Request>
     bool isCacheInvalidate() const { return _flags.isSet(INVALIDATE); }
     bool isCacheMaintenance() const { return _flags.isSet(CLEAN|INVALIDATE); }
     /** @} */
-
-    void
-    setGPUFuncAccess(bool flag) {
-        _isGPUFuncAccess = flag;
-    }
-
-    bool
-    getGPUFuncAccess()
-    {
-        return _isGPUFuncAccess;
-    }
 };
 
 } // namespace gem5

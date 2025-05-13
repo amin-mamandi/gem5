@@ -53,6 +53,7 @@
 #include "sim/full_system.hh"
 #include "sim/process.hh"
 #include "sim/system.hh"
+#include "debug/TLBMy.hh"
 
 namespace gem5
 {
@@ -156,6 +157,15 @@ TLB::insert(Addr vpn, const TlbEntry &entry)
         vpn, entry.asid, buildKey(vpn, entry.asid), entry.vaddr, entry.paddr,
         entry.pte, entry.size());
 
+    if (entry.deterministic) {
+        DPRINTF(TLBInsertMy, "TLB insert == vpn=0x%05x vaddr=0x%016x paddr=0x%016x "
+                "asid=%d size=0x%x pte_details={mt=0x%x rsw=%d v=%d r=%d w=%d x=%d "
+                "u=%d g=%d a=%d d=%d ppn=0x%09x}\n",
+                vpn, entry.vaddr, entry.paddr, entry.asid, entry.size(), 
+                entry.pte.mt, entry.pte.rsw, entry.pte.v, entry.pte.r, entry.pte.w, 
+                entry.pte.x, entry.pte.u, entry.pte.g, entry.pte.a, entry.pte.d, 
+                entry.pte.ppn);
+    }
     // If somebody beat us to it, just use that existing entry.
     TlbEntry *newEntry = lookup(vpn, entry.asid, BaseMMU::Read, true);
     if (newEntry) {
@@ -295,10 +305,10 @@ TLB::createPagefault(Addr vaddr, BaseMMU::Mode mode)
 }
 
 Addr
-TLB::hiddenTranslateWithTLB(Addr vaddr, uint16_t asid, Addr xmode,
-                            BaseMMU::Mode mode)
+TLB::translateWithTLB(Addr vaddr, uint16_t asid, Addr xmode,
+                      BaseMMU::Mode mode)
 {
-    TlbEntry *e = lookup(getVPNFromVAddr(vaddr, xmode), asid, mode, true);
+    TlbEntry *e = lookup(getVPNFromVAddr(vaddr, xmode), asid, mode, false);
     assert(e != nullptr);
     return e->paddr << PageShift | (vaddr & mask(e->logBytes));
 }
@@ -344,6 +354,28 @@ TLB::doTranslate(const RequestPtr &req, ThreadContext *tc,
             return fault;
     }
 
+    if (e->isDetMemory()) 
+    {
+
+        uint64_t oldFlags = req->getFlags();
+        req->setFlags(req->getFlags() | Request::DETERMINISTIC);
+        req->setFlags(req->getFlags() | Request::STRICT_ORDER);
+        req->setFlags(req->getFlags() | Request::UNCACHEABLE);
+
+        uint64_t newFlags = req->getFlags();
+        
+        DPRINTF(TLBMy, "TLB setting DETERMINISTIC flag for addr %#x: flags %#x -> %#x, isDeterministic=%d\n", 
+                vaddr, oldFlags, newFlags, req->isDeterministic());
+        
+        DPRINTF(TLBMy, "doTranslate == vaddr=0x%016x paddr=0x%016x mode=%s vpn=0x%05x "
+            "asid=%d size=%x pc=0x%08x rsw=%d\n", 
+            vaddr, (e->paddr << PageShift | (vaddr & mask(e->logBytes))),
+            (mode == BaseMMU::Read) ? "READ" : 
+            (mode == BaseMMU::Write) ? "WRITE" : "EXECUTE",
+            getVPNFromVAddr(vaddr, satp.mode), 
+            satp.asid, e->size(), req->getPC(), e->pte.rsw);
+    }
+
     Addr paddr = e->paddr << PageShift | (vaddr & mask(e->logBytes));
     DPRINTF(TLBVerbose, "translate(vaddr=%#x, vpn=%#x, asid=%#x): %#x\n",
             vaddr, vpn, satp.asid, paddr);
@@ -385,9 +417,9 @@ TLB::translate(const RequestPtr &req, ThreadContext *tc,
         if (fault == NoFault) {
             if (req->getFlags() & Request::PHYSICAL) {
                 /**
-                 * we simply set the virtual address to physical address.
+                 * we simply set the virtual address to physical address
                  */
-                req->setPaddr(getValidAddr(req->getVaddr(), tc, mode));
+                req->setPaddr(req->getVaddr());
             } else {
                 fault = doTranslate(req, tc, translation, mode, delayed);
             }
@@ -418,18 +450,9 @@ TLB::translate(const RequestPtr &req, ThreadContext *tc,
 
         Process * p = tc->getProcessPtr();
 
-        /*
-         * In RV32 Linux, as vaddr >= 0x80000000 is legal in userspace
-         * (except for COMPAT mode for RV32 Userspace in RV64 Linux), we
-         * need to ignore the upper bits beyond 32 bits.
-         */
-        Addr vaddr = getValidAddr(req->getVaddr(), tc, mode);
-        Addr paddr;
-
-        if (!p->pTable->translate(vaddr, paddr))
-            return std::make_shared<GenericPageTableFault>(req->getVaddr());
-
-        req->setPaddr(paddr);
+        Fault fault = p->pTable->translate(req);
+        if (fault != NoFault)
+            return fault;
 
         return NoFault;
     }
@@ -460,7 +483,7 @@ Fault
 TLB::translateFunctional(const RequestPtr &req, ThreadContext *tc,
                          BaseMMU::Mode mode)
 {
-    const Addr vaddr = getValidAddr(req->getVaddr(), tc, mode);
+    const Addr vaddr = req->getVaddr();
     Addr paddr = vaddr;
 
     if (FullSystem) {
