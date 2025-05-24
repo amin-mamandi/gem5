@@ -78,9 +78,10 @@ NoncoherentCache::satisfyRequest(PacketPtr pkt, CacheBlk *blk, bool, bool)
 
 bool
 NoncoherentCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
-                         PacketList &writebacks, ArrayAccessType &data_access)
+                         PacketList &writebacks, ArrayAccessType &data_access,
+                         bool is_deterministic)
 {
-    bool success = BaseCache::access(pkt, blk, lat, writebacks, data_access);
+    bool success = BaseCache::access(pkt, blk, lat, writebacks, data_access, is_deterministic);
 
     if (pkt->isWriteback() || pkt->cmd == MemCmd::WriteClean) {
         assert(blk && blk->isValid());
@@ -130,6 +131,16 @@ NoncoherentCache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk,
 
     BaseCache::handleTimingReqMiss(pkt, mshr, blk, forward_time, request_time);
 }
+
+// bool
+// NoncoherentCache::unblockCache()
+// {
+//     if (isBlocked()) {
+//         clearBlocked(Blocked_NoMSHRs);
+//         return true;
+//     }
+//     return false;
+// }
 
 void
 NoncoherentCache::recvTimingReq(PacketPtr pkt)
@@ -346,7 +357,7 @@ NoncoherentCache::evictBlock(CacheBlk *blk)
     // further action for evictions of clean blocks (i.e., CleanEvicts
     // are unnecessary).
     PacketPtr pkt = (blk->isSet(CacheBlk::DirtyBit) || writebackClean) ?
-        writebackBlk(blk) : nullptr;
+        writebackBlk(blk, pkt->req->requestorId()) : nullptr;
 
     invalidateBlock(blk);
 

@@ -124,6 +124,7 @@ class BaseCache : public ClockedObject
     {
         Blocked_NoMSHRs = MSHRQueue_MSHRs,
         Blocked_NoWBBuffers = MSHRQueue_WriteBuffer,
+        Blocked_MemGuard,
         Blocked_NoTargets,
         NUM_BLOCKED_CAUSES
     };
@@ -502,6 +503,8 @@ class BaseCache : public ClockedObject
 
         bool isBlocked() const { return blocked; }
 
+        Cycles Core0blockedCycle;
+
       protected:
 
         CacheResponsePort(const std::string &_name, BaseCache& _cache,
@@ -513,6 +516,8 @@ class BaseCache : public ClockedObject
         RespPacketQueue queue;
 
         bool blocked;
+
+        bool is_core0_blocked;
 
         bool mustSendRetry;
 
@@ -536,6 +541,8 @@ class BaseCache : public ClockedObject
         virtual bool tryTiming(PacketPtr pkt) override;
 
         virtual bool recvTimingReq(PacketPtr pkt) override;
+
+        // virtual bool unblockCache() override;
 
         virtual Tick recvAtomic(PacketPtr pkt) override;
 
@@ -766,7 +773,8 @@ class BaseCache : public ClockedObject
      * @return Boolean indicating whether the request was satisfied.
      */
     virtual bool access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
-                        PacketList &writebacks, ArrayAccessType &data_access);
+                        PacketList &writebacks, ArrayAccessType &data_access,
+                        bool isDet = false);
 
     /*
      * Handle a timing request that hit in the cache
@@ -843,6 +851,8 @@ class BaseCache : public ClockedObject
      * @param pkt The current bus transaction.
      */
     virtual void recvTimingSnoopReq(PacketPtr pkt) = 0;
+
+    // virtual bool unblockCache() = 0;
 
     /**
      * Handle a snoop response.
@@ -1076,7 +1086,7 @@ class BaseCache : public ClockedObject
      * @param writebacks A list of writeback packets for the evicted blocks
      * @return the allocated block
      */
-    CacheBlk *allocateBlock(const PacketPtr pkt, PacketList &writebacks);
+    CacheBlk *allocateBlock(const PacketPtr pkt, PacketList &writebacks, RequestorID requestorID, bool isDetermReq);
     /**
      * Evict a cache block.
      *
@@ -1110,7 +1120,7 @@ class BaseCache : public ClockedObject
      * @param blk The block to writeback.
      * @return The writeback request for the block.
      */
-    PacketPtr writebackBlk(CacheBlk *blk);
+    PacketPtr writebackBlk(CacheBlk *blk, RequestorID requestorID);
 
     /**
      * Create a writeclean request for the given block.
@@ -1163,6 +1173,8 @@ class BaseCache : public ClockedObject
 
     /** Block size of this cache */
     const unsigned blkSize;
+    
+    uint64_t mshrCount;
 
     /**
      * The latency of tag lookup of a cache. It occurs when there is
@@ -1375,6 +1387,20 @@ class BaseCache : public ClockedObject
 
         const BaseCache &cache;
 
+        // New DM-specific stats
+        statistics::Vector dmHits;
+        statistics::Vector dmMisses;
+
+        // DM stats - aggregated across commands
+        statistics::Formula dmDemandHits;
+        statistics::Formula dmDemandMisses;
+        statistics::Formula dmDemandAccesses;
+        
+        // Non-DM request counters
+        statistics::Scalar nonDmKernelReq;
+        statistics::Scalar nonDmUserReq;
+        statistics::Scalar nonDmNoVaddrReq;
+
         /** Number of hits for demand accesses. */
         statistics::Formula demandHits;
         /** Number of hit for all accesses. */
@@ -1567,11 +1593,23 @@ class BaseCache : public ClockedObject
             // Either block globally or handle specially
             return nullptr;  // Or handle this case differently
         }
+
+        bool memguard_throttled = false;
+        if (system->use_memguard && is_dcache) {
+            int mshr_limit = system->getmshrCount(cpu_id);
+            DPRINTF(Cache, "MSHR limit for CPU %d is %d\n", cpu_id, mshr_limit);
+            if (mshr_limit >= 0 && mshr_limit <= 1) {  // Heavily throttled
+                DPRINTF(Cache, "it is heavily throttled\n");
+                memguard_throttled = true;
+            }
+        }
         
         MSHR *mshr = mshrQueue.allocate(pkt->getBlockAddr(blkSize), blkSize,
                                         pkt, time, order++,
                                         allocOnFill(pkt->cmd), bank_id);
-        if (mshrQueue.isFull()) {
+        bool queue_full = mshrQueue.isFull();
+        
+        if (mshrQueue.isFull() || memguard_throttled) {
             setBlocked((BlockedCause)MSHRQueue_MSHRs);
         }
 
@@ -1650,8 +1688,15 @@ class BaseCache : public ClockedObject
     void clearBlocked(BlockedCause cause)
     {
         uint8_t flag = 1 << cause;
+        
+        // DEFENSIVE: Check if actually blocked before clearing
+        // if (!(blocked & flag)) {
+        //     DPRINTF(AMINmshr, "clearBlocked called for cause %d but not blocked\n", cause);
+        //     return;  // Don't clear if not blocked for this cause
+        // }
+        
         blocked &= ~flag;
-        DPRINTF(Cache,"Unblocking for cause %d, mask=%d\n", cause, blocked);
+        DPRINTF(AMINmshr,"Unblocking for cause %d, mask=%d\n", cause, blocked);
         if (blocked == 0) {
             stats.blockedCycles[cause] += curCycle() - blockedCycle;
             cpuSidePort.clearBlocked();
@@ -1700,6 +1745,10 @@ class BaseCache : public ClockedObject
     {
         assert(pkt->req->requestorId() < system->maxRequestors());
         stats.cmdStats(pkt).misses[pkt->req->requestorId()]++;
+        // If this is a deterministic request, also increment DM miss counter
+        // if(pkt->req->isDeterministic()) {
+        //     stats.dmMisses[pkt->req->requestorId()]++;
+        // }
         pkt->req->incAccessDepth();
         if (missCount) {
             --missCount;
@@ -1711,6 +1760,10 @@ class BaseCache : public ClockedObject
     {
         assert(pkt->req->requestorId() < system->maxRequestors());
         stats.cmdStats(pkt).hits[pkt->req->requestorId()]++;
+        // If this is a deterministic request, also increment DM hit counter
+        // if (pkt->req->isDeterministic()) {
+        //     stats.dmHits[pkt->req->requestorId()]++;
+        // }
     }
 
     /**
@@ -1782,6 +1835,10 @@ class BaseCache : public ClockedObject
     void unserialize(CheckpointIn &cp) override;
 
     bool isLLC;
+    bool is_dcache;
+    bool is_icache;
+    /** CPU ID for this cache (for private caches) */
+    const uint8_t cpu_id = -1;
 };
 
 /**

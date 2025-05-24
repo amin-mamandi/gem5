@@ -70,6 +70,69 @@ PartitionManager::notifyRelease(uint64_t partition_id)
 }
 
 void
+PartitionManager::setWayAllocation(uint64_t partition_id, int lowerNum, int upperNum)
+{
+    for (auto policy : partitioningPolicies) {
+        if (auto way_policy = dynamic_cast<partitioning_policy::WayPartitioningPolicy*>(policy)) {
+            way_policy->setWayAllocation(partition_id, lowerNum, upperNum);
+            return; // Return immediately after calling the method
+        }
+    }
+    
+    // If we get here, no WayPartitioningPolicy was found
+    DPRINTF(PartitioningPolicies, "No WayPartitioningPolicy found\n");
+}
+
+void
+PartitionManager::clearDM(uint64_t partition_id, int lowerWay, int upperWay)
+{
+    // Find the WayPartitioningPolicy if not yet found
+    if (!wayPolicy) {
+        for (auto policy : partitioningPolicies) {
+            wayPolicy = dynamic_cast<partitioning_policy::WayPartitioningPolicy*>(policy);
+            if (wayPolicy) {
+                DPRINTF(DetPart, "Found WayPartitioningPolicy\n");
+                break;
+            }
+        }
+    }
+    
+    // Delegate to the WayPartitioningPolicy if found
+    if (wayPolicy) {
+        wayPolicy->clearDM(partition_id, lowerWay, upperWay);
+    } else {
+        DPRINTF(DetPart, "No WayPartitioningPolicy found in the PartitionManager\n");
+    }
+}
+
+void 
+PartitionManager::setDmAssoc(bool dmAssoc)
+{
+    for (auto policy : partitioningPolicies) {
+        if (auto way_policy = dynamic_cast<partitioning_policy::WayPartitioningPolicy*>(policy)) {
+            way_policy->setDmAssoc(dmAssoc);
+        }
+    }
+}
+void 
+PartitionManager::setPartitioningEnabled(bool enabled) {
+    for (auto policy : partitioningPolicies) {
+        if (auto way_policy = dynamic_cast<partitioning_policy::WayPartitioningPolicy*>(policy)) {
+            way_policy->setPartitioningEnabled(enabled);
+        }
+    }
+}
+
+bool 
+PartitionManager::isPartitioningEnabled() {
+    for (auto policy : partitioningPolicies) {
+        if (auto way_policy = dynamic_cast<partitioning_policy::WayPartitioningPolicy*>(policy)) {
+            return way_policy->isPartitioningEnabled();
+        }
+    }
+    return false;
+}
+void
 PartitionManager::filterByPartition(
     std::vector<ReplaceableEntry *> &entries,
     const uint64_t partition_id) const

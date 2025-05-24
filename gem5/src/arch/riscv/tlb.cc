@@ -360,7 +360,7 @@ TLB::doTranslate(const RequestPtr &req, ThreadContext *tc,
         uint64_t oldFlags = req->getFlags();
         req->setFlags(req->getFlags() | Request::DETERMINISTIC);
         req->setFlags(req->getFlags() | Request::STRICT_ORDER);
-        req->setFlags(req->getFlags() | Request::UNCACHEABLE);
+        // req->setFlags(req->getFlags() | Request::UNCACHEABLE);
 
         uint64_t newFlags = req->getFlags();
         

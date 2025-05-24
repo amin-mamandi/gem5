@@ -92,6 +92,29 @@ class BasePartitioningPolicy : public SimObject
     */
     virtual void
     notifyRelease(const uint64_t partition_id) = 0;
+
+    /**
+     * Set the way allocation range for a partition ID
+     * @param partition_id The partition to configure
+     * @param lowerNum Lower bound of ways
+     * @param upperNum Upper bound of ways
+     */
+    virtual void setWayAllocation(uint64_t partition_id, int lowerNum, int upperNum) {}
+
+    /**
+     * Clear deterministic bits for blocks in a way range
+     * @param partition_id The partition to clear
+     * @param lowerWay Lower bound of ways to clear
+     * @param upperWay Upper bound of ways to clear
+     */
+    virtual void clearDM(uint64_t partition_id, int lowerWay, int upperWay) {}
+
+    /**
+     * set deterministic Associativity
+     * @param dmAssoc The associativity to set
+     */
+    virtual void setDmAssoc(bool dmAssoc) {}
+
 };
 
 } // namespace partitioning_policy

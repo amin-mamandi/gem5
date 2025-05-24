@@ -1,0 +1,376 @@
+diff --git a/gem5/src/mem/dram_interface.cc b/gem5/src/mem/dram_interface.cc
+index fca3282f27..b5e438ef7c 100644
+--- a/gem5/src/mem/dram_interface.cc
++++ b/gem5/src/mem/dram_interface.cc
+@@ -56,6 +56,219 @@ using namespace Data;
+ namespace memory
+ {
+ 
++/*
++std::pair<MemPacketQueue::iterator, Tick>
++DRAMInterface::chooseNextMedusa(MemPacketQueue& queue, Tick min_col_at) const
++{
++    DPRINTF(DetMem, "chooseNextMedusa: Starting packet selection\n");
++    
++    // First check if there are any deterministic packets
++    for (auto i = queue.begin(); i != queue.end(); ++i) {
++        MemPacket* mem_pkt = *i;
++        if (mem_pkt->isDeterministic) {
++            DPRINTF(DetMem, "chooseNextMedusa: Found deterministic packet addr=%#x bank=%d row=%d\n",
++                    mem_pkt->addr, mem_pkt->bank, mem_pkt->row);
++            // If we found a deterministic packet, return it immediately
++            // Found a deterministic packet, prioritize it
++            return std::make_pair(i, mem_pkt->readyTime);
++        }
++    }
++
++    bool found_prepped_diff_rank_pkt = false;
++    bool found_earliest_pkt = false;
++
++    static uint64_t bankmaskSaved = system()->medusaReservedBankMask;
++    static uint64_t dm_req_srv_count = 0;
++    bool be_req_exist = false;
++    bool found_reserved_diff_bank = false;
++    bool found_reserved_same_bank = false;
++    bool found_row_hit = false;
++    
++    Tick selected_col_at = MaxTick;
++
++
++    auto selected_pkt_it = queue.end();
++    
++    if (!bankmaskSaved){
++        DPRINTF(DetMem, "chooseNextMedusa: Initializing bankmaskSaved=%#x\n", 
++                system()->medusaReservedBankMask);
++        bankmaskSaved = system()->medusaReservedBankMask;
++    }
++    
++    DPRINTF(DetMem, "chooseNextMedusa: Current bankmaskSaved=%#x, dm_req_srv_count=%d\n", 
++            bankmaskSaved, dm_req_srv_count);
++
++    // Check if there are any requests to non-reserved banks
++    for (auto i = queue.begin(); i != queue.end(); ++i) {
++        MemPacket* mem_pkt = *i;
++        if (mem_pkt->pseudoChannel != pseudoChannel) {
++            continue;
++        }
++        
++        if (~(system()->medusaReservedBankMask) & (0x01 << mem_pkt->bank)) {
++            DPRINTF(DetMem, "chooseNextMedusa: Found best-effort request to bank=%d addr=%#x\n", 
++                    mem_pkt->bank, mem_pkt->addr);
++            be_req_exist = true;
++            break;
++        }
++    }
++    
++    DPRINTF(DetMem, "chooseNextMedusa: Best-effort requests exist=%d, Reserved bank mask=%#x\n", 
++            be_req_exist, system()->medusaReservedBankMask);
++    
++    // Arbitrate Requests in the DRAM queue using two-level
++    // hierarchical scheduler
++    for (auto i = queue.begin(); i != queue.end(); ++i) {
++        MemPacket* mem_pkt = *i;
++        
++        if (mem_pkt->pseudoChannel != pseudoChannel) {
++            continue;
++        }
++        
++        // Check if the rank is in a refresh cycle - skip if it is
++        if (!ranks[mem_pkt->rank]->inRefIdleState()) {
++            DPRINTF(DetMem, "chooseNextMedusa: Rank %d not in refresh idle state, skipping\n", 
++                    mem_pkt->rank);
++            continue;
++        }
++        
++        // RR scheduler on reserved banks
++        // Check if packet targets a reserved bank
++        if ((system()->medusaReservedBankMask & (0x01 << mem_pkt->bank)) &&
++            !(be_req_exist && dm_req_srv_count >= system()->dm_req_srv_thresh)) {
++            
++            DPRINTF(DetMem, "chooseNextMedusa: Considering reserved bank packet addr=%#x bank=%d\n", 
++                    mem_pkt->addr, mem_pkt->bank);
++                    
++            // Check if this bank is in our current round-robin mask
++            if (bankmaskSaved & (0x01 << mem_pkt->bank)) {
++                DPRINTF(DetMem, "chooseNextMedusa: Bank %d in RR mask, selecting\n", mem_pkt->bank);
++                selected_pkt_it = i;
++                found_reserved_diff_bank = true;
++                
++                // Get the bank timing
++                const Bank& bank = ranks[mem_pkt->rank]->banks[mem_pkt->bank];
++                selected_col_at = mem_pkt->isRead() ? 
++                                 bank.rdAllowedAt : bank.wrAllowedAt;
++                
++                // Once we selected a packet from a particular reserved bank,
++                // clear that bank bit to ensure next request selected 
++                // is from a different reserved bank (enforcing RR)
++                bankmaskSaved &= ~(0x01 << mem_pkt->bank);
++                DPRINTF(DetMem, "chooseNextMedusa: Updated bankmaskSaved=%#x after selection\n", 
++                        bankmaskSaved);
++                
++                // If we've processed all banks, reset the mask for next round
++                if (!bankmaskSaved) {
++                    bankmaskSaved = system()->medusaReservedBankMask;
++                    DPRINTF(DetMem, "chooseNextMedusa: Reset bankmaskSaved=%#x for new round\n", 
++                            bankmaskSaved);
++                }
++                    
++                break;
++            }
++            else if (!found_reserved_same_bank) {
++                // Store first packet to an already selected reserved bank
++                // in case no packets to other reserved banks
++                DPRINTF(DetMem, "chooseNextMedusa: Bank %d not in current RR mask but saving as fallback\n", 
++                        mem_pkt->bank);
++                selected_pkt_it = i;
++                found_reserved_same_bank = true;
++                
++                // Get the bank timing
++                const Bank& bank = ranks[mem_pkt->rank]->banks[mem_pkt->bank];
++                selected_col_at = mem_pkt->isRead() ? 
++                                 bank.rdAllowedAt : bank.wrAllowedAt;
++            }
++        }
++        // Else, use normal FR-FCFS logic for non-reserved banks
++        else if (!found_reserved_diff_bank && !found_reserved_same_bank) {
++            const Bank& bank = ranks[mem_pkt->rank]->banks[mem_pkt->bank];
++            const Tick col_allowed_at = mem_pkt->isRead() ? 
++                                       bank.rdAllowedAt : bank.wrAllowedAt;
++                                       
++            // check if rank is available
++            if (burstReady(mem_pkt)) {
++                // Check for row hit
++                if (bank.openRow == mem_pkt->row) {
++                    DPRINTF(DetMem, "chooseNextMedusa: Row hit for addr=%#x bank=%d row=%d\n", 
++                            mem_pkt->addr, mem_pkt->bank, mem_pkt->row);
++                            
++                    // Follow same logic as chooseNextFRFCFS for row hits
++                    if (col_allowed_at <= min_col_at) {
++                        // Seamless buffer hit
++                        DPRINTF(DetMem, "chooseNextMedusa: Seamless row hit, selecting\n");
++                        selected_pkt_it = i;
++                        selected_col_at = col_allowed_at;
++                        found_row_hit = true;
++                        break;
++                    } 
++                    else if (!found_row_hit && !found_prepped_diff_rank_pkt) {
++                        // Not seamless, but still a row hit
++                        DPRINTF(DetMem, "chooseNextMedusa: Non-seamless row hit, selecting\n");
++                        selected_pkt_it = i;
++                        selected_col_at = col_allowed_at;
++                        found_row_hit = true;
++                    }
++                }
++                // No row hit, check for earliest bank availability
++                else if (!found_earliest_pkt && !found_row_hit && 
++                         !found_prepped_diff_rank_pkt) {
++                    DPRINTF(DetMem, "chooseNextMedusa: Checking earliest bank for addr=%#x bank=%d\n", 
++                            mem_pkt->addr, mem_pkt->bank);
++                            
++                    // Use same minBankPrep logic as in chooseNextFRFCFS
++                    std::vector<uint32_t> earliest_banks;
++                    bool hidden_bank_prep;
++                    std::tie(earliest_banks, hidden_bank_prep) = 
++                        minBankPrep(queue, min_col_at);
++                        
++                    if (bits(earliest_banks[mem_pkt->rank],
++                             mem_pkt->bank, mem_pkt->bank)) {
++                        DPRINTF(DetMem, "chooseNextMedusa: Bank %d is among earliest available\n", 
++                                mem_pkt->bank);
++                        selected_pkt_it = i;
++                        selected_col_at = col_allowed_at;
++                        found_earliest_pkt = true;
++                    }
++                }
++            }
++        }
++    }
++    
++    // If we found a packet
++    if (selected_pkt_it != queue.end()) {
++        // Update deterministic memory request service count
++        if (system()->medusaReservedBankMask & 
++            (0x01 << (*selected_pkt_it)->bank)) {
++            DPRINTF(DetMem, "chooseNextMedusa: Selected reserved bank %d, incrementing dm_req_srv_count to %d\n", 
++                    (*selected_pkt_it)->bank, dm_req_srv_count + 1);
++            dm_req_srv_count++;
++        } else {
++            DPRINTF(DetMem, "chooseNextMedusa: Selected non-reserved bank %d, resetting dm_req_srv_count\n", 
++                    (*selected_pkt_it)->bank);
++            dm_req_srv_count = 0;
++        }
++        
++        // Reset round robin mask if needed
++        if (!found_reserved_diff_bank && found_reserved_same_bank) {
++            bankmaskSaved = (system()->medusaReservedBankMask) & 
++                           ~(0x01 << (*selected_pkt_it)->bank);
++            DPRINTF(DetMem, "chooseNextMedusa: No RR match but same bank, updated bankmaskSaved=%#x\n", 
++                    bankmaskSaved);
++        }
++        
++        DPRINTF(DetMem, "chooseNextMedusa: Selected packet addr=%#x bank=%d row=%d ready_at=%lld\n", 
++                (*selected_pkt_it)->addr, (*selected_pkt_it)->bank, 
++                (*selected_pkt_it)->row, selected_col_at);
++    } else {
++        DPRINTF(DetMem, "chooseNextMedusa: No suitable packet found!\n");
++    }
++    
++    return std::make_pair(selected_pkt_it, selected_col_at);
++}
++*/
++
+ std::pair<MemPacketQueue::iterator, Tick>
+ DRAMInterface::chooseNextFRFCFS(MemPacketQueue& queue, Tick min_col_at) const
+ {
+@@ -658,6 +871,8 @@ DRAMInterface::DRAMInterface(const DRAMInterfaceParams &_p)
+       timeStampOffset(0), activeRank(0),
+       enableDRAMPowerdown(_p.enable_dram_powerdown),
+       lastStatsResetTick(0),
++      rowsFirstPart(_p.rows_1),
++      rowsSecondPart(0), 
+       stats(*this)
+ {
+     DPRINTF(DRAM, "Setting up DRAM Interface\n");
+@@ -696,6 +911,8 @@ DRAMInterface::DRAMInterface(const DRAMInterfaceParams &_p)
+ 
+     rowsPerBank = capacity / (rowBufferSize * banksPerRank * ranksPerChannel);
+ 
++    rowsSecondPart = rowsPerBank / rowsFirstPart;
++
+     // some basic sanity checks
+     if (tREFI <= tRP || tREFI <= tRFC) {
+         fatal("tREFI (%d) must be larger than tRP (%d) and tRFC (%d)\n",
+@@ -741,7 +958,7 @@ DRAMInterface::DRAMInterface(const DRAMInterfaceParams &_p)
+ void
+ DRAMInterface::init()
+ {
+-    AbstractMemory::init();
++    AbstractMemory::init(); // xalamin: don't know why they commented this out
+ 
+     // a bit of sanity checks on the interleaving, save it for here to
+     // ensure that the system pointer is initialised
+@@ -785,7 +1002,7 @@ DRAMInterface::startup()
+ {
+     if (system()->isTimingMode()) {
+         // timestamp offset should be in clock cycles for DRAMPower
+-        timeStampOffset = divCeil(curTick(), tCK);
++        timeStampOffset = divCeil(curTick(), tCK); // xalamin: tehy have also commented out everything related to timeStampOffset
+ 
+         for (auto r : ranks) {
+             r->startup(curTick() + tREFI - tRP);
+@@ -835,6 +1052,14 @@ MemPacket*
+ DRAMInterface::decodePacket(const PacketPtr pkt, Addr pkt_addr,
+                        unsigned size, bool is_read, uint8_t pseudo_channel)
+ {
++    // Check if this is a deterministic packet
++    bool is_deterministic = false;
++    // Check based on requestor or other criteria
++    if (pkt->req->isDeterministic()) {
++        DPRINTF(DetMem, "Deterministic packet detected for address %#x\n", pkt_addr);
++        is_deterministic = true;
++    }
++
+     // decode the address based on the address mapping scheme, with
+     // Ro, Ra, Co, Ba and Ch denoting row, rank, column, bank and
+     // channel, respectively
+@@ -843,6 +1068,7 @@ DRAMInterface::decodePacket(const PacketPtr pkt, Addr pkt_addr,
+     // use a 64-bit unsigned during the computations as the row is
+     // always the top bits, and check before creating the packet
+     uint64_t row;
++    uint64_t row_1, row_2;
+ 
+     // Get packed address, starting at 0
+     Addr addr = getCtrlAddr(pkt_addr);
+@@ -870,6 +1096,34 @@ DRAMInterface::decodePacket(const PacketPtr pkt, Addr pkt_addr,
+ 
+         // lastly, get the row bits, no need to remove them from addr
+         row = addr % rowsPerBank;
++    } else if (addrMapping == enums::RoRaBaRoChCo) {
++
++        // DPRINTF(DetMem, "Using RoRaBaRoChCo address mapping\n");
++        // the lowest order bits denote the column to ensure that
++        // sequential cache lines occupy the same row
++        addr = addr / burstsPerRowBuffer;
++
++        // For single channel, no need to remove channel bits
++        // addr = addr / channels; // Not needed for one channel
++
++        // Get the first part of row bits
++        row_1 = addr % rowsFirstPart;
++        addr = addr / rowsFirstPart;
++
++        // after the channel bits, get the bank bits to interleave
++        // over the banks
++        bank = addr % banksPerRank;
++        addr = addr / banksPerRank;
++
++        // after the bank, we get the rank bits which thus interleaves
++        // over the ranks
++        rank = addr % ranksPerChannel;
++        addr = addr / ranksPerChannel;
++
++        // lastly, get the row bits
++        row_2 = addr % rowsSecondPart;
++        addr = addr / rowsSecondPart;
++        row = row_2 * rowsFirstPart + row_1;
+     } else if (addrMapping == enums::RoCoRaBaCh) {
+         // with emerging technologies, could have small page size with
+         // interleaving granularity greater than row buffer
+@@ -907,6 +1161,25 @@ DRAMInterface::decodePacket(const PacketPtr pkt, Addr pkt_addr,
+ 
+     DPRINTF(DRAM, "Address: %#x Rank %d Bank %d Row %d\n",
+             pkt_addr, rank, bank, row);
++    /*
++    DPRINTF(DetMem, "Address breakdown for %#x:\n"
++        "  Rank %d (bits %d-%d)\n"
++        "  Bank %d (bits %d-%d)\n"
++        "  Row %d (bits %d-%d)\n"
++        "  Row_1 %d, Row_2 %d (row split for RoRaBaRoChCo)\n"
++        "  Channel bits position: %d-%d\n"
++        "  Column bits position: %d-%d\n"
++        "  Full binary: %s\n",
++        pkt_addr, 
++        rank, log2(ranksPerChannel) + log2(banksPerRank) + log2(rowsPerBank), log2(banksPerRank) + log2(rowsPerBank),
++        bank, log2(banksPerRank) + log2(rowsPerBank), log2(rowsPerBank),
++        row, log2(rowsPerBank) - 1, 0,
++        row_1, row_2,
++        log2(rowsFirstPart), 0, // Channel bit positions
++        log2(burstsPerRowBuffer) - 1, 0, // Column bit positions 
++        std::bitset<64>(pkt_addr).to_string() // Full binary representation 
++        );
++    */
+ 
+     // create the corresponding memory packet with the entry time and
+     // ready time set to the current tick, the latter will be updated
+@@ -914,7 +1187,7 @@ DRAMInterface::decodePacket(const PacketPtr pkt, Addr pkt_addr,
+     uint16_t bank_id = banksPerRank * rank + bank;
+ 
+     return new MemPacket(pkt, is_read, true, pseudo_channel, rank, bank, row,
+-                   bank_id, pkt_addr, size);
++                   bank_id, pkt_addr, size, is_deterministic);
+ }
+ 
+ void DRAMInterface::setupRank(const uint8_t rank, const bool is_read)
+@@ -1024,6 +1297,22 @@ DRAMInterface::suspend()
+     }
+ }
+ 
++// bool
++// DRAMInterface::isRequestToReservedBank(const MemPacketQueue& queue) const
++// {
++//     for (auto i = queue.begin(); i != queue.end(); ++i) {
++//         MemPacket* mem_pkt = *i;
++//         if (mem_pkt->pseudoChannel != pseudoChannel) {
++//             continue;
++//         }
++        
++//         if (system()->medusaReservedBankMask & (0x01 << mem_pkt->bank)) {
++//             return true;
++//         }
++//     }
++//     return false;
++// }
++
+ std::pair<std::vector<uint32_t>, bool>
+ DRAMInterface::minBankPrep(const MemPacketQueue& queue,
+                       Tick min_col_at) const

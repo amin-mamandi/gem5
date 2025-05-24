@@ -369,6 +369,23 @@ CPU::tick()
     ++baseStats.numCycles;
     updateCycleCounters(BaseCPU::CPU_STATE_ON);
 
+    // if (system->use_memguard && system->budgetInit[cpuId()])
+    // {
+    //     if(!(system->cycleInit[cpuId()]))
+    //         system->cycleInit[cpuId()] = curCycle();
+    //     if ((curCycle() - system->cycleInit[cpuId()]) >= 1000000)
+    //     {
+    //         system->resetMemBudget(cpuId());
+    //         system->cycleInit[cpuId()] = curCycle();
+    //         iew.ldstQueue.getDataPort().unblockCache();
+    //     }
+    // }
+    
+    // if (system->switched_mshr_count[cpuId()]) {
+    //     iew.ldstQueue.getDataPort().unblockCache();
+    //     system->switched_mshr_count[cpuId()] = false;
+    // }
+
 //    activity = false;
 
     //Tick each of the stages

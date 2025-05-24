@@ -59,6 +59,7 @@
 #include "mem/packet.hh"
 #include "params/BaseTags.hh"
 #include "sim/clocked_object.hh"
+#include "debug/ClearDm.hh"
 
 namespace gem5
 {
@@ -187,6 +188,13 @@ class BaseTags : public ClockedObject
     void cleanupRefs();
 
     /**
+     * Clear the deterministic bit for blocks in the specified way range.
+     * @param lowerWay Lower bound of the way range.
+     * @param upperWay Upper bound of the way range.
+     */
+    void clearDeterministicBits(int lowerWay, int upperWay);
+
+    /**
      * Computes stats just prior to dump event
      */
     void computeStats();
@@ -302,7 +310,7 @@ class BaseTags : public ClockedObject
     virtual CacheBlk* findVictim(Addr addr, const bool is_secure,
                                  const std::size_t size,
                                  std::vector<CacheBlk*>& evict_blks,
-                                 const uint64_t partition_id=0) = 0;
+                                 const uint64_t partition_id) = 0;
 
     /**
      * Access block and update replacement data. May not succeed, in which case

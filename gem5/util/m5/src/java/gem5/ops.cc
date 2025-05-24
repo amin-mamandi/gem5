@@ -110,6 +110,42 @@ Java_gem5_Ops_setupCallTypes(JNIEnv *env, jclass clazz)
 }
 
 JNIEXPORT void JNICALL
+Java_gem5_Ops_setmshr(JNIEnv *env, jobject obj, jlong j_cpu_id, jlong j_mshr_value)
+{
+    getDispatchTable(env, obj)->m5_setmshr(j_cpu_id, j_mshr_value);
+}
+
+JNIEXPORT void JNICALL
+Java_gem5_Ops_setmembudget(JNIEnv *env, jobject obj, jlong j_cpu_id, jlong j_budget)
+{
+    getDispatchTable(env, obj)->m5_setmembudget(j_cpu_id, j_budget);
+}
+
+JNIEXPORT void JNICALL
+Java_gem5_Ops_enablememguard(JNIEnv *env, jobject obj, jlong j_enable_value)
+{
+    getDispatchTable(env, obj)->m5_enablememguard(j_enable_value);
+}
+
+JNIEXPORT void JNICALL
+Java_gem5_Ops_cleardm(JNIEnv *env, jobject obj, jlong j_clear_value)
+{
+    getDispatchTable(env, obj)->m5_cleardm(j_clear_value);
+}
+
+JNIEXPORT void JNICALL
+Java_gem5_Ops_exitinst(JNIEnv *env, jobject obj, jlong j_n_inst)
+{
+    getDispatchTable(env, obj)->m5_exitinst(j_n_inst);
+}
+
+JNIEXPORT void JNICALL
+Java_gem5_Ops_medusa(JNIEnv *env, jobject obj, jlong j_use)
+{
+    getDispatchTable(env, obj)->m5_medusa(j_use);
+}
+
+JNIEXPORT void JNICALL
 Java_gem5_Ops_setAddr(JNIEnv *env, jclass clazz, jlong addr)
 {
     m5op_addr = addr;

@@ -131,11 +131,12 @@ class PrivateL1SharedL2CacheHierarchy(
                 size=self._l1i_size,
                 assoc=self._l1i_assoc,
                 writeback_clean=False,
+                cpu_id=i,
             )
             for i in range(board.get_processor().get_num_cores())
         ]
         self.l1dcaches = [
-            L1DCache(size=self._l1d_size, assoc=self._l1d_assoc)
+            L1DCache(size=self._l1d_size, assoc=self._l1d_assoc, cpu_id=i)
             for i in range(board.get_processor().get_num_cores())
         ]
         self.l2bus = L2XBar()
@@ -180,7 +181,8 @@ class PrivateL1SharedL2CacheHierarchy(
 
         self.l2cache = L2Cache(size=self._l2_size, assoc=self._l2_assoc, 
                                enable_banks=True, num_banks=4,
-                               partitioning_manager=partition_manager)
+                               partitioning_manager=partition_manager,
+                               is_LLC= True)
         # ITLB Page walk caches
         self.iptw_caches = [
             MMUCache(size="8KiB", writeback_clean=False)

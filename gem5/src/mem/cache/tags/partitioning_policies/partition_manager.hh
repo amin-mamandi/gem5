@@ -42,6 +42,9 @@
 #include "params/PartitionManager.hh"
 #include "sim/sim_object.hh"
 #include "debug/PartitioningPolicies.hh"
+#include "mem/cache/tags/partitioning_policies/way_pp.hh"
+#include "mem/request.hh"
+#include "debug/DetPart.hh"
 
 namespace gem5
 {
@@ -55,6 +58,9 @@ class BasePartitioningPolicy;
 
 class PartitionManager : public SimObject
 {
+  private:
+    partitioning_policy::WayPartitioningPolicy* wayPolicy = nullptr;
+
   public:
     PARAMS(PartitionManager);
     PartitionManager(const Params &p);
@@ -68,36 +74,19 @@ class PartitionManager : public SimObject
     */
     virtual uint64_t
     readPacketPartitionID(PacketPtr pkt) const
-    {
-      // Try to determine which CPU the request is from based on requestorID
-      RequestorID req_id = pkt->req->requestorId();
+    {      
+      // temp: 
+      return 0;
+      // Default to using CPU ID 0
+      int cpu_id = 0;
       
-      // RequestorIDs are typically assigned in a pattern where:
-      // CPU 0: data=8, inst=7, dtb_walker=3, itb_walker=4, etc.
-      // CPU 1: data=14, inst=13, dtb_walker=9, itb_walker=10, etc.
-      // CPU 2: data=20, inst=19, dtb_walker=15, itb_walker=16, etc.
-      // CPU 3: data=26, inst=25, dtb_walker=21, itb_walker=22, etc.
-      
-      // Map requestor ID to CPU ID (these mappings need to be adjusted for your system)
-      int cpu_id = -1;
-      
-      if (req_id >= 3 && req_id <= 8) {
-          cpu_id = 0;  // CPU 0 requestors
-      } else if (req_id >= 9 && req_id <= 14) {
-          cpu_id = 1;  // CPU 1 requestors  
-      } else if (req_id >= 15 && req_id <= 20) {
-          cpu_id = 2;  // CPU 2 requestors
-      } else if (req_id >= 21 && req_id <= 26) {
-          cpu_id = 3;  // CPU 3 requestors
+      // If this request has a context ID, use it directly
+      if (pkt->req->hasContextId()) {
+          cpu_id = pkt->req->contextId();
+          // DPRINTF(PartitioningPolicies, "Using context ID %d as partition ID\n", cpu_id);
       }
       
-      DPRINTF(PartitioningPolicies, "Packet from requestor %d assigned to partition ID %d\n", 
-              req_id, (cpu_id == 0) ? 0 : 1);
-      
-      // Map CPU 0 to partition ID 0, all others to partition ID 1
-      return (cpu_id == 0) ? 0 : 1;
-
-      // return 0;
+      return cpu_id;
     };
 
     /**
@@ -110,6 +99,12 @@ class PartitionManager : public SimObject
 
     void filterByPartition(std::vector<ReplaceableEntry *> &entries,
         const uint64_t partition_id) const;
+
+    void setWayAllocation(uint64_t partition_id, int lowerNum, int upperNum);
+    void clearDM(uint64_t partition_id, int lowerWay, int upperWay);
+    void setPartitioningEnabled(bool enabled);
+    bool isPartitioningEnabled();
+    void setDmAssoc(bool dmAssoc);
 
   protected:
     /** Partitioning policies */

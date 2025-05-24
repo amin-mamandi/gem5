@@ -55,6 +55,7 @@
 #include "sim/faults.hh"
 #include "sim/full_system.hh"
 #include "sim/system.hh"
+#include "debug/MemGuard.hh"
 
 namespace gem5
 {
@@ -611,6 +612,26 @@ void
 AtomicSimpleCPU::tick()
 {
     DPRINTF(SimpleCPU, "Tick\n");
+
+    // if (system->use_memguard && system->budgetInit[cpuId()]) {
+
+    //     // DPRINTF(MemGuard, "memguard has been enabled and the budget is %d\n", system->budgetInit[cpuId()]);
+    //     if(!(system->cycleInit[cpuId()]))
+    //         system->cycleInit[cpuId()] = curCycle();
+    //     if ((curCycle() - system->cycleInit[cpuId()]) >= 1000000)
+    //     {
+    //         system->resetMemBudget(cpuId());
+    //         system->cycleInit[cpuId()] = curCycle();
+    //         dcachePort.unblockCache();
+    //         DPRINTF(MemGuard, "memguard budget has been reset and the cache has been unblocked!\n");
+
+    //     }
+    // }
+    
+    // if (system->switched_mshr_count[cpuId()]) {
+    //     dcachePort.unblockCache();
+    //     system->switched_mshr_count[cpuId()] = false;
+    // }
 
     // Change thread if multi-threaded
     swapActiveThread();

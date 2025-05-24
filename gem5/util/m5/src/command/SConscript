@@ -39,7 +39,14 @@ command_ccs = [
     'resetstats.cc',
     'writefile.cc',
     'workbegin.cc',
-    'workend.cc'
+    'workend.cc',
+    'setmshr.cc',
+    'medusa.cc',
+    'exit_inst.cc',
+    'cleardm.cc',
+    'enablememguard.cc',
+    'setmembudget.cc',
+    'enablewaypart.cc',
 ]
 
 command_objs = list(map(env.StaticObject, command_ccs))

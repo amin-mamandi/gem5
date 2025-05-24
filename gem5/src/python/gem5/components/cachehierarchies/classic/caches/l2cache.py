@@ -58,6 +58,7 @@ class L2Cache(Cache):
         PrefetcherCls: Type[BasePrefetcher] = StridePrefetcher,
         enable_banks: bool = True,
         num_banks: int = 4,
+        is_LLC: bool = True,
         partitioning_manager = None,  # Add this parameter
     ):
         super().__init__()
@@ -73,6 +74,7 @@ class L2Cache(Cache):
         self.prefetcher = PrefetcherCls()
         self.enable_banks = True
         self.num_banks = 4
+        self.is_LLC = True
         self.bank_intlv_high_bit = 0
 
         # Add this line to set the partitioning manager

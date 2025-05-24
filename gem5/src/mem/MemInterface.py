@@ -50,7 +50,7 @@ from m5.proxy import *
 # hitting in the open row. For a closed-page policy, RoCoRaBaCh
 # maximises parallelism.
 class AddrMap(Enum):
-    vals = ["RoRaBaChCo", "RoRaBaCoCh", "RoCoRaBaCh"]
+    vals = ["RoRaBaChCo", "RoRaBaCoCh", "RoCoRaBaCh", "RoRaBaRoChCo"]
 
 
 class MemInterface(AbstractMemory):
@@ -64,7 +64,8 @@ class MemInterface(AbstractMemory):
     # configuration (e.g. x32 with burst length 8 is 32 bytes) and not
     # the cacheline size or request/packet size
     write_buffer_size = Param.Unsigned(64, "Number of write queue entries")
-    read_buffer_size = Param.Unsigned(32, "Number of read queue entries")
+    read_buffer_size = Param.Unsigned(64, "Number of read queue entries")
+    unified_buffer_size =  Param.Unsigned(128, "Number of write queue entries")
 
     # scheduler, address map
     addr_mapping = Param.AddrMap("RoRaBaCoCh", "Address mapping policy")

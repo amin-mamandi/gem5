@@ -86,7 +86,8 @@ class Cache : public BaseCache
     void promoteWholeLineWrites(PacketPtr pkt);
 
     bool access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
-                PacketList &writebacks, ArrayAccessType &data_access) override;
+                PacketList &writebacks, ArrayAccessType &data_access,
+                bool isDet) override;
 
     void handleTimingReqHit(PacketPtr pkt, CacheBlk *blk,
                             Tick request_time) override;
@@ -103,6 +104,14 @@ class Cache : public BaseCache
 
     void serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt,
                             CacheBlk *blk) override;
+
+    /**
+     * Handle a request to clear the blocked status of the cache.
+     * Called from the CPU side to indicate that resources are available.
+     * 
+     * @return True if the cache was blocked before the call
+     */
+    // bool unblockCache() override;
 
     void recvTimingSnoopReq(PacketPtr pkt) override;
 

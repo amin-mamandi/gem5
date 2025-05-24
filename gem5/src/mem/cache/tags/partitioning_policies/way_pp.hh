@@ -45,9 +45,13 @@
 #include "mem/cache/replacement_policies/replaceable_entry.hh"
 #include "mem/cache/tags/partitioning_policies/base_pp.hh"
 #include "params/WayPartitioningPolicy.hh"
+#include "debug/DetPart.hh"
+#include "mem/cache/tags/base.hh"
 
 namespace gem5
 {
+
+class BaseTags;
 
 namespace partitioning_policy
 {
@@ -64,6 +68,23 @@ class WayPartitioningPolicy : public BasePartitioningPolicy
 {
   public:
     WayPartitioningPolicy(const WayPartitioningPolicyParams &params);
+
+    /**
+     * Set the partitioning mode
+     * @param enabled Whether partitioning is enabled
+     */
+    void setPartitioningEnabled(bool enabled) { 
+        partitioningEnabled = enabled; 
+    }
+
+    /**
+     * get if partitioning is enabled
+     * @return true if partitioning is enabled
+     */
+    bool isPartitioningEnabled()
+    {
+        return partitioningEnabled;
+    }
 
     void
     filterByPartition(std::vector<ReplaceableEntry *> &entries,
@@ -85,12 +106,47 @@ class WayPartitioningPolicy : public BasePartitioningPolicy
     void
     notifyRelease(const uint64_t partition_id) override {};
 
+    /**
+     * Limit the allocation for the cache ways.
+     * @param lowerNum Lower bound of ways available for replacement
+     * @param upperNum Upper bound of ways available for replacement
+     */
+    void
+    setWayAllocation(uint64_t partition_id, int lowerNum, int upperNum) override;
+
+    /**
+     * Clear deterministic bits for all blocks in a way range
+     * @param partition_id The partition to clear
+     * @param lowerWay Lower bound of ways to clear
+     * @param upperWay Upper bound of ways to clear
+     */
+    void
+    clearDM(uint64_t partition_id, int lowerWay, int upperWay) override;
+
+    void
+    setDmAssoc(bool dmAssoc) override
+    {
+        this->dmAssoc = dmAssoc;
+        DPRINTF(DetPart, "Setting dmAssoc to %d\n", dmAssoc);
+    }
+
   private:
     /**
     * Map of policied PartitionIDs and their associated cache ways
     */
     std::unordered_map< uint64_t, std::unordered_set< unsigned > >
         partitionIdWays;
+
+    /** Cache pointer */
+    BaseTags *cache;
+
+    /** Whether way partitioning is enabled */
+    bool partitioningEnabled = true;
+
+    /** Cache associativity */
+    const unsigned assoc;
+
+    bool dmAssoc = false;
 };
 
 } // namespace partitioning_policy

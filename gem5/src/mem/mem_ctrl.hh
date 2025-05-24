@@ -59,6 +59,7 @@
 #include "mem/qport.hh"
 #include "params/MemCtrl.hh"
 #include "sim/eventq.hh"
+#include "debug/DetMem.hh"
 
 namespace gem5
 {
@@ -123,6 +124,8 @@ class MemPacket
     const uint8_t rank;
     const uint8_t bank;
     const uint32_t row;
+
+    const bool isDeterministic;
 
     /**
      * Bank id is calculated considering banks in all the ranks
@@ -205,12 +208,12 @@ class MemPacket
 
     MemPacket(PacketPtr _pkt, bool is_read, bool is_dram, uint8_t _channel,
                uint8_t _rank, uint8_t _bank, uint32_t _row, uint16_t bank_id,
-               Addr _addr, unsigned int _size)
+               Addr _addr, unsigned int _size, bool is_deterministic = false)
         : entryTime(curTick()), readyTime(curTick()), pkt(_pkt),
           _requestorId(pkt->requestorId()),
           read(is_read), dram(is_dram), pseudoChannel(_channel), rank(_rank),
           bank(_bank), row(_row), bankId(bank_id), addr(_addr), size(_size),
-          burstHelper(NULL), _qosValue(_pkt->qosValue())
+          burstHelper(NULL), _qosValue(_pkt->qosValue()), isDeterministic(is_deterministic)
     { }
 
 };
@@ -320,6 +323,9 @@ class MemCtrl : public qos::MemCtrl
      */
     bool readQueueFull(unsigned int pkt_count) const;
 
+    
+    bool isRequestToReservedBank(const std::vector<MemPacketQueue>& queues);
+
     /**
      * Check if the write queue has room for more entries
      *
@@ -345,6 +351,19 @@ class MemCtrl : public qos::MemCtrl
      */
     bool addToReadQueue(PacketPtr pkt, unsigned int pkt_count,
                         MemInterface* mem_intr);
+
+    /**
+     * get the cpuid of the memory controller
+     * @param bank The bank number
+     * @return The cpuid of the memory controller
+     */
+     uint8_t getCpuid(uint8_t bank);
+
+     /**
+      * set memory bandwidth regulation for the given cpu_id
+      * @param cpu_id The cpu id
+      */
+     void memGuard(uint8_t cpu_id);
 
     /**
      * Decode the incoming pkt, create a mem_pkt and push to the
@@ -617,6 +636,29 @@ class MemCtrl : public qos::MemCtrl
         // per-requestor raed and write average memory access latency
         statistics::Formula requestorReadAvgLat;
         statistics::Formula requestorWriteAvgLat;
+
+        // Bank and core specific stats for detailed memory access analysis
+        // statistics::Scalar readBurstsBank0;
+        // statistics::Scalar readBurstsCore0;
+        // statistics::Scalar readBurstsCore0Other;
+        // statistics::Scalar readBurstsBank3;
+        // statistics::Scalar readBurstsCore3;
+        // statistics::Scalar readBurstsCore3Other;
+        // statistics::Average avgRdQLenBank0;
+        // statistics::Average avgRespQLenBank0;
+        // statistics::Scalar totMemAccLatBank0;
+        // statistics::Scalar totMemAccLatCore0;
+        // statistics::Scalar totMemAccLatCore0Other;
+        // statistics::Scalar totMemAccLatBank3;
+        // statistics::Scalar totMemAccLatCore3;
+        // statistics::Scalar totMemAccLatCore3Other;
+        // // Formulas for bank/core specific latency
+        // statistics::Formula avgMemAccLatBank0;
+        // statistics::Formula avgMemAccLatCore0;
+        // statistics::Formula avgMemAccLatCore0Other;
+        // statistics::Formula avgMemAccLatBank3;
+        // statistics::Formula avgMemAccLatCore3;
+        // statistics::Formula avgMemAccLatCore3Other;
     };
 
     CtrlStats stats;

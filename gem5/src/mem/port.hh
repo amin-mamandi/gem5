@@ -57,6 +57,7 @@
 #include "mem/protocol/functional.hh"
 #include "mem/protocol/timing.hh"
 #include "sim/port.hh"
+#include "debug/DetPort.hh"
 
 namespace gem5
 {
@@ -164,6 +165,11 @@ class RequestPort: public Port, public AtomicRequestProtocol,
     void unbind() override;
 
     /**
+     * trying to unblock the cache.
+     */
+    // bool unblockCache();
+
+    /**
      * Determine if this request port is snooping or not. The default
      * implementation returns false and thus tells the neighbour we
      * are not snooping. Any request port that wants to receive snoop
@@ -240,13 +246,6 @@ class RequestPort: public Port, public AtomicRequestProtocol,
 
   public:
     /* The timing protocol. */
-
-    /**
-     * Attempt to unblock the connected response port's cache.
-     *
-     * @return If the unblock was successful or not.
-     */
-    bool unblockCache();
 
     /**
      * Attempt to send a timing request to the responder port by calling
@@ -524,11 +523,12 @@ class ResponsePort : public Port, public AtomicResponseProtocol,
      *
      * @return If the unblock was successful or not.
      */
-    virtual bool unblockCache()
-    {
-        panic("%s was not expecting to unblock cache\n", name());
-        return false;
-    }
+
+    // virtual bool unblockCache()
+    // {
+    //     panic("%s was not expecting to unblock cache \n", name());
+    //     return false;
+    // }
 
     /**
      * Called by the request port to unbind. Should never be called
@@ -614,16 +614,6 @@ RequestPort::sendMemBackdoorReq(const MemBackdoorReq &req,
     try {
         return FunctionalRequestProtocol::sendMemBackdoorReq(
                 _responsePort, req, backdoor);
-    } catch (UnboundPortException) {
-        reportUnbound();
-    }
-}
-
-inline bool
-RequestPort::unblockCache()
-{
-    try {
-        return _responsePort->unblockCache();
     } catch (UnboundPortException) {
         reportUnbound();
     }

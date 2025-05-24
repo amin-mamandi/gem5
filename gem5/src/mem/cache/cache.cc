@@ -62,6 +62,7 @@
 #include "mem/cache/write_queue_entry.hh"
 #include "mem/request.hh"
 #include "params/Cache.hh"
+#include "debug/MyCache.hh"
 
 namespace gem5
 {
@@ -159,7 +160,8 @@ Cache::satisfyRequest(PacketPtr pkt, CacheBlk *blk,
 
 bool
 Cache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
-              PacketList &writebacks, ArrayAccessType &data_access)
+              PacketList &writebacks, ArrayAccessType &data_access,
+              bool isdeterministic)
 {
 
     if (pkt->req->isUncacheable()) {
@@ -183,7 +185,7 @@ Cache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
         return false;
     }
 
-    return BaseCache::access(pkt, blk, lat, writebacks, data_access);
+    return BaseCache::access(pkt, blk, lat, writebacks, data_access, isdeterministic);
 }
 
 void
@@ -262,6 +264,16 @@ Cache::doWritebacksAtomic(PacketList& writebacks)
     }
 }
 
+// bool
+// Cache::unblockCache()
+// {
+//     if (isBlocked()) {
+//         DPRINTF(MyCache, "Cache::unblockCache ==  %s\n", name());
+//         clearBlocked(Blocked_NoMSHRs);
+//         return true;
+//     }
+//     return false;
+// }
 
 void
 Cache::recvTimingSnoopResp(PacketPtr pkt)
@@ -961,7 +973,7 @@ PacketPtr
 Cache::evictBlock(CacheBlk *blk)
 {
     PacketPtr pkt = (blk->isSet(CacheBlk::DirtyBit) || writebackClean) ?
-        writebackBlk(blk) : cleanEvictBlk(blk);
+        writebackBlk(blk, 0) : cleanEvictBlk(blk);
 
     invalidateBlock(blk);
 

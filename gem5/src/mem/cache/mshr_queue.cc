@@ -55,8 +55,10 @@ namespace gem5
 
 MSHRQueue::MSHRQueue(const std::string &_label,
                      int num_entries, int reserve,
-                     int demand_reserve, std::string cache_name = "", int num_banks = 0, bool _enableBanks = false)
-    : Queue<MSHR>(_label, num_entries, reserve, cache_name + ".mshr_queue"),
+                     int demand_reserve, System *_system, bool _is_dcache, uint8_t _cpu_id,
+                     const std::string &cache_name, int num_banks, bool _enableBanks)
+    : Queue<MSHR>(_label, num_entries, reserve, cache_name + ".mshr_queue",
+                  _system, _is_dcache, _cpu_id),
       demandReserve(demand_reserve),
       enableBanks(_enableBanks),
       maxMSHRsPerBank(0)  // Initialize with safe default

@@ -246,6 +246,64 @@ do_work_begin(lua_State *L)
 }
 
 static int
+do_setmshr(lua_State *L)
+{
+    uint8_t cpu_id = lua_tointeger(L, 1);
+    uint64_t mshrcount = lua_tointeger(L, 2);
+    m5_setmshr(cpu_id, mshrcount);
+    return 0;
+}
+
+static int
+do_setmembudget(lua_State *L)
+{
+    uint8_t cpu_id = lua_tointeger(L, 1);
+    uint64_t mem_budget = lua_tointeger(L, 2);
+    m5_setmembudget(cpu_id, mem_budget);
+    return 0;
+}
+
+static int
+do_enablememguard(lua_State *L)
+{
+    int use = lua_tointeger(L, 1);
+    m5_enablememguard(use);
+    return 0;
+}
+
+static int
+do_cleardm(lua_State *L)
+{
+    int use = lua_tointeger(L, 1);
+    m5_cleardm(use);
+    return 0;
+}
+
+static int
+do_exit_inst(lua_State *L)
+{
+    uint64_t n_inst = lua_tointeger(L, 1);
+    m5_exit_inst(n_inst);
+    return 0;
+}
+
+static int
+do_medusa(lua_State *L)
+{
+    uint64_t use = lua_tointeger(L, 1);
+    m5_medusa(use);
+    return 0;
+}
+
+static int
+do_enablewaypart(lua_State *L)
+{
+    uint64_t enable_value = lua_tointeger(L, 1);
+    m5_enablewaypart(enable_value);
+    return 0;
+}
+
+static int
 do_work_end(lua_State *L)
 {
     uint64_t workid = lua_tointeger(L, 1);
@@ -295,6 +353,13 @@ luaopen_gem5OpLua(lua_State *L)
     ADD_FUNC(do_panic);
     ADD_FUNC(do_work_begin);
     ADD_FUNC(do_work_end);
+    ADD_FUNC(do_setmshr);
+    ADD_FUNC(do_setmembudget);
+    ADD_FUNC(do_enablememguard);
+    ADD_FUNC(do_cleardm);
+    ADD_FUNC(do_exit_inst);
+    ADD_FUNC(do_medusa);
+    ADD_FUNC(do_enablewaypart);
 #undef ADD_FUNC
     return 1;
 }

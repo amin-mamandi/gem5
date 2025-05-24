@@ -38,6 +38,13 @@ command_tests = (
     'resetstats',
     'sum',
     'writefile',
+    'setmshr',
+    'medusa',
+    'exit_inst',
+    'cleardm',
+    'enablememguard',
+    'setmembudget',
+    'enablewaypart',
 )
 
 Return('command_tests')

@@ -100,7 +100,8 @@ class DefaultResponsePort : public ResponsePort
     bool tryTiming(PacketPtr) override { blowUp(); }
     bool recvTimingSnoopResp(PacketPtr) override { blowUp(); }
     void recvRespRetry() override { blowUp(); }
-    bool unblockCache() override { blowUp(); }
+    
+    // bool unblockCache() override { blowUp(); }
 
     // Functional protocol.
     void recvFunctional(PacketPtr) override { blowUp(); }
@@ -158,6 +159,17 @@ RequestPort::bind(Port &peer)
     // response port also keeps track of request port
     _responsePort->responderBind(*this);
 }
+
+// bool
+// RequestPort::unblockCache()
+// {
+//     panic_if(!isConnected(), "Can't unblock request port %s which is "
+//     "not bound.", name());
+//     DPRINTF(DetPort, "Unblocking cache for %s\n", name());
+//     return _responsePort->unblockCache();
+    
+// }
+
 
 void
 RequestPort::unbind()

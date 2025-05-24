@@ -51,6 +51,8 @@
 #include "mem/cache/mshr.hh"
 #include "mem/cache/queue.hh"
 #include "mem/packet.hh"
+#include "sim/system.hh"
+#include "debug/AMINmshr.hh"
 
 namespace gem5
 {
@@ -91,7 +93,8 @@ class MSHRQueue : public Queue<MSHR>
      * demand accesses.
      */
     MSHRQueue(const std::string &_label, int num_entries, int reserve,
-              int demand_reserve, std::string cache_name, int num_banks, bool _enableBanks);
+              int demand_reserve, System *_system, bool _is_dcache, uint8_t _cpu_id,
+              const std::string &cache_name = "", int num_banks = 0, bool _enableBanks = false);
 
 
     /**

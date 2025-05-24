@@ -150,10 +150,19 @@ class ChanneledMemory(AbstractMemorySystem):
             intlv_low_bit = log(rowbuffer_size, 2)
         elif self._addr_mapping in ["RoRaBaCoCh", "RoCoRaBaCh"]:
             intlv_low_bit = log(self._intlv_size, 2)
+        elif self._addr_mapping == "RoRaBaRoChCo":
+            # For RoRaBaRoChCo mapping, use a similar approach to RoRaBaChCo
+            # but adjust for the additional row bits in the middle
+            # You may need to adjust this logic based on your specific requirements
+            rowbuffer_size = (
+                self._dram_class.device_rowbuffer_size.value
+                * self._dram_class.devices_per_rank.value
+            )
+            intlv_low_bit = log(rowbuffer_size, 2)
         else:
             raise ValueError(
                 "Only these address mappings are supported: "
-                "RoRaBaChCo, RoRaBaCoCh, RoCoRaBaCh"
+                "RoRaBaChCo, RoRaBaCoCh, RoCoRaBaCh, RoRaBaRoChCo"
             )
 
         intlv_bits = log(self._num_channels, 2)

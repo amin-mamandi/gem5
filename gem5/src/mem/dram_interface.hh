@@ -49,6 +49,7 @@
 #include "mem/drampower.hh"
 #include "mem/mem_interface.hh"
 #include "params/DRAMInterface.hh"
+#include "debug/DetMem.hh"
 
 namespace gem5
 {
@@ -636,6 +637,8 @@ class DRAMInterface : public MemInterface
      */
     Tick writeToReadDelay() const override { return tBURST + tWTR + tWL; }
 
+    // bool isRequestToReservedBank(const MemPacketQueue& queue) const;
+
     /**
      * Find which are the earliest banks ready to issue an activate
      * for the enqueued requests. Assumes maximum of 32 banks per rank
@@ -659,6 +662,15 @@ class DRAMInterface : public MemInterface
     }
 
   public:
+
+    // uint64_t dm_req_srv_thresh = 300;
+
+    /** First part of row bits for RoRaBaRoChCo mapping */
+    uint32_t rowsFirstPart;
+  
+    /** Second part of row bits for RoRaBaRoChCo mapping */
+    uint32_t rowsSecondPart;
+
     /**
      * Initialize the DRAM interface and verify parameters
      */
@@ -725,6 +737,10 @@ class DRAMInterface : public MemInterface
      */
     std::pair<MemPacketQueue::iterator, Tick>
     chooseNextFRFCFS(MemPacketQueue& queue, Tick min_col_at) const override;
+
+
+    // std::pair<MemPacketQueue::iterator, Tick>
+    // chooseNextMedusa(MemPacketQueue& queue, Tick min_col_at) const override;
 
     /**
      * Actually do the burst - figure out the latency it

@@ -104,4 +104,10 @@ public class Ops {
     public native void panic();
     public native void work_begin(long workid, long threadid);
     public native void work_end(long workid, long threadid);
+    public native void setmshr(long cpuId, long mshrValue);
+    public native void setmembudget(long cpuId, long budget);
+    public native void enablememguard(long enableValue);
+    public native void cleardm(long clearValue);
+    public native void exitinst(long nInst);
+    public native void medusa(long use);
 }

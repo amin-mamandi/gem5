@@ -62,7 +62,6 @@
 #include "mem/cache/tags/partitioning_policies/partition_manager.hh"
 #include "mem/packet.hh"
 #include "params/BaseSetAssoc.hh"
-#include "debug/PPP.hh"
 
 namespace gem5
 {
@@ -176,13 +175,11 @@ class BaseSetAssoc : public BaseTags
         // Get possible entries to be victimized
         std::vector<ReplaceableEntry*> entries =
             indexingPolicy->getPossibleEntries(addr);
-        // print out the size of entries first here
-        DPRINTF(PPP,"entries size before filter: %d\n", entries.size());
+
         // Filter entries based on PartitionID
         if (partitionManager) {
             partitionManager->filterByPartition(entries, partition_id);
         }
-        DPRINTF(PPP, "entries size after filter: %d\n", entries.size());
 
         // Choose replacement victim from replacement candidates
         CacheBlk* victim = entries.empty() ? nullptr :
@@ -210,8 +207,6 @@ class BaseSetAssoc : public BaseTags
 
         if (partitionManager) {
             auto partition_id = partitionManager->readPacketPartitionID(pkt);
-            DPRINTF(PPP, "blk->getPartID(): %d \n", partition_id);
-            DPRINTF(PPP, "pkt->print(): %s \n", pkt->print());
             partitionManager->notifyAcquire(partition_id);
         }
 

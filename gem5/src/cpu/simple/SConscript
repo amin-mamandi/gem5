@@ -43,6 +43,7 @@ if env['CONF']['BUILD_ISA']:
     Source('timing.cc')
 
     DebugFlag('SimpleCPU')
+    DebugFlag('MemGuard')
 
     Source('base.cc')
     SimObject('BaseSimpleCPU.py', sim_objects=['BaseSimpleCPU'])

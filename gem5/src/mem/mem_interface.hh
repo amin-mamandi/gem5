@@ -60,6 +60,7 @@
 #include "mem/mem_ctrl.hh"
 #include "params/MemInterface.hh"
 #include "sim/eventq.hh"
+#include "debug/DetMem.hh"
 
 namespace gem5
 {
@@ -266,6 +267,9 @@ class MemInterface : public AbstractMemory
      */
     virtual std::pair<MemPacketQueue::iterator, Tick>
     chooseNextFRFCFS(MemPacketQueue& queue, Tick min_col_at) const = 0;
+
+    // virtual std::pair<MemPacketQueue::iterator, Tick>
+    // chooseNextMedusa(MemPacketQueue& queue, Tick min_col_at) const = 0;
 
     /*
      * Function to calulate unloaded latency

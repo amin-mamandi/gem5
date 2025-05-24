@@ -66,6 +66,13 @@ void m5_load_symbol();
 void m5_panic(void);
 void m5_work_begin(uint64_t workid, uint64_t threadid);
 void m5_work_end(uint64_t workid, uint64_t threadid);
+void m5_setmshr(uint8_t cpu_id, uint64_t mshrcount);
+void m5_setmembudget(uint8_t cpu_id, uint64_t mshrcount);
+void m5_enablememguard(int use);
+void m5_cleardm(int use);
+void m5_exit_inst(uint64_t n_inst);
+void m5_medusa(uint64_t use);
+void m5_enablewaypart(uint64_t use);
 
 /*
  * Send a very generic poke to the workload so it can do something. It's up to

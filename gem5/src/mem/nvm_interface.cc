@@ -201,8 +201,14 @@ NVMInterface::decodePacket(const PacketPtr pkt, Addr pkt_addr,
     uint16_t bank_id = banksPerRank * rank + bank;
 
     return new MemPacket(pkt, is_read, false, pseudo_channel, rank, bank, row,
-                   bank_id, pkt_addr, size);
+                   bank_id, pkt_addr, size, false);
 }
+
+// std::pair<MemPacketQueue::iterator, Tick>
+// NVMInterface::chooseNextMedusa(MemPacketQueue& queue, Tick min_col_at) const
+// {
+//     panic("Medusa interface is not implemented yet!\n");
+// }
 
 std::pair<MemPacketQueue::iterator, Tick>
 NVMInterface::chooseNextFRFCFS(MemPacketQueue& queue, Tick min_col_at) const

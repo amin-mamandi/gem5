@@ -90,7 +90,6 @@ BaseSetAssoc::invalidate(CacheBlk *blk)
 {
     // Notify partitioning policies of release of ownership
     if (partitionManager) {
-        DPRINTF(PPP, "blk->getPartID(): %d \n", blk->getPartitionId());
         partitionManager->notifyRelease(blk->getPartitionId());
     }
 

@@ -55,6 +55,7 @@
 #include "sim/core.hh"
 #include "sim/sim_exit.hh"
 #include "sim/system.hh"
+#include "debug/ClearDm.hh"
 
 namespace gem5
 {
@@ -141,6 +142,28 @@ BaseTags::moveBlock(CacheBlk *src_blk, CacheBlk *dest_blk)
 
     assert(dest_blk->isValid());
     assert(!src_blk->isValid());
+}
+
+void
+BaseTags::clearDeterministicBits(int lowerWay, int upperWay)
+{
+    int cleared = 0;
+    DPRINTF(ClearDm, "Clearing deterministic bits for ways %d to %d\n", 
+            lowerWay, upperWay);
+    
+    // Use anyBlk to iterate through all blocks
+    anyBlk([this, lowerWay, upperWay, &cleared](CacheBlk &blk) {
+        int way = blk.getWay();
+        if (way >= lowerWay && way <= upperWay && blk.isDeterministic()) {
+            DPRINTF(ClearDm, "Clearing deterministic bit for block at %#llx in way %d\n", 
+                    regenerateBlkAddr(&blk), way);
+            blk.setDeterministic(false);
+            cleared++;
+        }
+        return false; // Continue iteration (return true would stop iteration)
+    });
+    
+    DPRINTF(ClearDm, "Cleared deterministic bits for %d blocks\n", cleared);
 }
 
 Addr

@@ -56,6 +56,7 @@
 #include "sim/faults.hh"
 #include "sim/full_system.hh"
 #include "sim/system.hh"
+#include "debug/MemGuard.hh"
 
 namespace gem5
 {
@@ -676,13 +677,38 @@ TimingSimpleCPU::finishTranslation(WholeTranslationState *state)
 void
 TimingSimpleCPU::fetch()
 {
-    // Change thread if multi-threaded
-    swapActiveThread();
-
     SimpleExecContext &t_info = *threadInfo[curThread];
     SimpleThread* thread = t_info.thread;
 
-    DPRINTF(SimpleCPU, "Fetch\n");
+    // int cpuId = thread->contextId();
+
+    // if (system->use_memguard && system->budgetInit[cpuId]) {
+    //     // DPRINTF(MemGuard, "Checking memory budget for CPU %d\n", cpuId);
+    //     if(!(system->cycleInit[cpuId])){
+    //         // DPRINTF(MemGuard, "Initializing memory budget for CPU %d\n", cpuId);
+    //         system->cycleInit[cpuId] = curCycle();
+    //     }
+    //     if ((curCycle() - system->cycleInit[cpuId]) >= 10000)
+    //     {
+    //         system->resetMemBudget(cpuId);
+    //         system->cycleInit[cpuId] = curCycle();
+    //         dcachePort.unblockCache();
+    //         DPRINTF(MemGuard, "memguard budget has been reset and the cache has been unblocked!\n");
+    //     }
+    // }
+
+    // if (system->switched_mshr_count[cpuId]) {
+    //     // DPRINTF(MemGuard, "Attempting to unblock cache for CPU %d\n", cpuId);
+    //     bool unblocked = dcachePort.unblockCache();
+    //     DPRINTF(MemGuard, "Cache unblock result: %s\n", unblocked ? "success" : "failed");
+    //     system->switched_mshr_count[cpuId] = false;
+    // }
+
+    // Change thread if multi-threaded
+    swapActiveThread();
+
+
+    DPRINTF(MemGuard, "Fetch\n");
 
     if (!curStaticInst || !curStaticInst->isDelayedCommit()) {
         checkForInterrupts();

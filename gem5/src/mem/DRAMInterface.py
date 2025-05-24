@@ -56,6 +56,8 @@ class DRAMInterface(MemInterface):
     # scheduler page policy
     page_policy = Param.PageManage("open_adaptive", "Page management policy")
 
+    rows_1 = Param.Unsigned('32', "Number of rows comes first (LSB) in the"\
+                            "mapping for RoRaBaRoChCo")
     # enforce a limit on the number of accesses per row
     max_accesses_per_row = Param.Unsigned(
         16, "Max accesses per row before closing"

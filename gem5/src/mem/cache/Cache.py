@@ -169,6 +169,8 @@ class BaseCache(ClockedObject):
     is_iCache = Param.Bool(False, "Is this cache an instruction cache")
     is_dCache = Param.Bool(False, "Is this cache a data cache")
 
+    cpu_id = Param.Int(0, "CPU ID for this cache")
+
     addr_ranges = VectorParam.AddrRange(
         [AllMemory], "Address range for the CPU-side port (to allow striping)"
     )

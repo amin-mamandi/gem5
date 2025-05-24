@@ -83,6 +83,7 @@ BaseCache::CacheResponsePort::CacheResponsePort(const std::string &_name,
       cache{_cache},
       queue(_cache, *this, true, _label),
       blocked(false), mustSendRetry(false),
+      is_core0_blocked(false),
       sendRetryEvent([this]{ processSendRetry(); }, _name)
 {
 }
@@ -93,7 +94,9 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
       memSidePort(p.name + ".mem_side_port", this, "MemSidePort"),
       accessor(*this),
       banks(p.num_banks),
-      mshrQueue("MSHRs", p.mshrs, 0, p.demand_mshr_reserve, p.name, p.num_banks, p.enable_banks),
+      mshrQueue("MSHRs", p.mshrs, 0, p.demand_mshr_reserve, 
+            p.system, p.is_dCache, p.cpu_id,
+            p.name, p.num_banks, p.enable_banks),
       writeBuffer("write buffer", p.write_buffers, p.mshrs, p.name),
       tags(p.tags),
       compressor(p.compressor),
@@ -139,9 +142,13 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
       system(p.system),
       stats(*this),
       isLLC(p.is_LLC),
+      is_dcache(p.is_dCache),
+      is_icache(p.is_iCache),
       bwRegulationEnabled(p.enable_bw_regulation),
       bwBudget(p.bw_budget),
-      monitorWindow(p.monitor_window)
+      monitorWindow(p.monitor_window),
+      mshrCount(p.mshrs),
+      cpu_id(p.cpu_id)
 {
     // the MSHR queue has no reserve entries as we check the MSHR
     // queue on every single allocation, whereas the write queue has
@@ -151,7 +158,8 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
 
     // forward snoops is overridden in init() once we can query
     // whether the connected requestor is actually snooping or not
-
+    printf("BaseCache %s: cpu_id=%d, is_dcache=%s, is_icache=%s\n", 
+            name().c_str(), cpu_id, is_dcache ? "true" : "false", is_icache ? "true" : "false");
     tempBlock = new TempCacheBlk(blkSize);
 
     tags->tagsInit();
@@ -621,8 +629,18 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
 void
 BaseCache::recvTimingReq(PacketPtr pkt)
 {
-    if(pkt->req->isDeterministic()){
-        DPRINTF(MyCache, "Deterministic request %s\n", pkt->print());
+
+    // Clear DM bits
+    if (isLLC && system->clearDmFlag)
+    {
+        // This implementation just works for CPU 0
+        if (system->clearDmCpuId == 0){
+            DPRINTF(MyCache, "Clearing deterministic bits for CPU 0\n");
+            tags->clearDeterministicBits(0, 3);
+        } else {
+          panic("Deterministic bit clearing just works for CPU 0");
+        }
+        system->clearDmFlag = false;
     }
 
     // anything that is merely forwarded pays for the forward latency and
@@ -652,7 +670,7 @@ BaseCache::recvTimingReq(PacketPtr pkt)
         // Note that lat is passed by reference here. The function
         // access() will set the lat value.
 
-        satisfied = access(pkt, blk, lat, writebacks, data_access);
+        satisfied = access(pkt, blk, lat, writebacks, data_access, pkt->req->isDeterministic());
 
         // After the evicted blocks are selected, they must be forwarded
         // to the write buffer to ensure they logically precede anything
@@ -766,6 +784,8 @@ BaseCache::recvTimingResp(PacketPtr pkt)
 {
     assert(pkt->isResponse());
 
+    DPRINTF(Cache, "TIMING_DEBUG: %s recvTimingResp: %s addr=0x%x\n", 
+           name().c_str(), pkt->cmdString().c_str(), pkt->getAddr());
     // all header delay should be paid for by the crossbar, unless
     // this is a prefetch response from above
     panic_if(pkt->headerDelay != 0 && pkt->cmd != MemCmd::HardPFResp,
@@ -965,6 +985,32 @@ BaseCache::recvTimingResp(PacketPtr pkt)
     delete pkt;
 }
 
+// bool
+// BaseCache::CpuSidePort::unblockCache()
+// {
+//     panic("never get here!");
+//     bool did_unblock = false;
+    
+//     // Handle memguard unblocking
+//     if (cache.system->use_memguard && cache.is_dcache) {
+//         if (cache.system->switched_mshr_count[cache.cpu_id]) {
+//             DPRINTF(MyCache, "Memguard reset detected for CPU %d\n", cache.cpu_id);
+//             cache.system->switched_mshr_count[cache.cpu_id] = false;
+//             did_unblock = true;  // Mark that we handled memguard reset
+//         }
+//     }
+    
+//     // Only do standard unblocking if we didn't handle memguard AND cache is blocked
+//     if (isBlocked() && !did_unblock) {
+//         DPRINTF(MyCache, "Standard cache unblock\n");
+//         cache.clearBlocked(Blocked_NoMSHRs);
+//         did_unblock = true;
+//     } else if (did_unblock && !isBlocked()) {
+//         DPRINTF(MyCache, "Memguard reset but cache already unblocked\n");
+//     }
+    
+//     return did_unblock;
+// }
 
 Tick
 BaseCache::recvAtomic(PacketPtr pkt)
@@ -973,6 +1019,19 @@ BaseCache::recvAtomic(PacketPtr pkt)
     // writebacks... that would mean that someone used an atomic
     // access in timing mode
 
+    // // Clear DM bits
+    if (isLLC && system->clearDmFlag)
+    {
+        // This implementation just works for CPU 0
+        if (system->clearDmCpuId == 0){
+            DPRINTF(Cache, "Clearing deterministic bits for CPU 0\n");
+            tags->clearDeterministicBits(0, 3);
+        }
+        else
+          panic("Deterministic bit clearing just works for CPU 0");
+        system->clearDmFlag = false;
+    }
+    
     // We use lookupLatency here because it is used to specify the latency
     // to access.
     Cycles lat = lookupLatency;
@@ -980,7 +1039,7 @@ BaseCache::recvAtomic(PacketPtr pkt)
     CacheBlk *blk = nullptr;
     PacketList writebacks;
     ArrayAccessType data_access;
-    bool satisfied = access(pkt, blk, lat, writebacks, data_access);
+    bool satisfied = access(pkt, blk, lat, writebacks, data_access, pkt->req->isDeterministic());
 
     if (pkt->isClean() && blk && blk->isSet(CacheBlk::DirtyBit)) {
         // A cache clean opearation is looking for a dirty
@@ -1051,6 +1110,19 @@ void
 BaseCache::functionalAccess(PacketPtr pkt, bool from_cpu_side)
 {
     Addr blk_addr = pkt->getBlockAddr(blkSize);
+
+    // Clear DM bits
+    if (isLLC && system->clearDmFlag)
+    {
+        // This implementation just works for CPU 0
+        if (system->clearDmCpuId == 0){
+            DPRINTF(Cache, "Clearing deterministic bits for CPU 0\n");
+            tags->clearDeterministicBits(0, 3);
+        } else {
+          panic("Deterministic bit clearing just works for CPU 0");
+        }
+        system->clearDmFlag = false;
+    }
 
     bool is_secure = pkt->isSecure();
     CacheBlk *blk = tags->findBlock(pkt->getAddr(), is_secure);
@@ -1624,9 +1696,11 @@ BaseCache::calculateAccessLatency(const CacheBlk* blk, const uint32_t delay,
     return lat;
 }
 
+// xalamin-access
 bool
 BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
-                  PacketList &writebacks, ArrayAccessType &data_access)
+                  PacketList &writebacks, ArrayAccessType &data_access,
+                  bool isDet)
 {
     // sanity check
     assert(pkt->isRequest());
@@ -1640,6 +1714,20 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
     // Access block in the tags
     Cycles tag_latency(0);
     blk = tags->accessBlock(pkt, tag_latency);
+
+    // if (blk && system->getWayPartMode() == 2) {
+    //     blk->setDeterministic(isDet);  // Use the actual request flag
+    // }
+
+    // if (!isDet)
+    // {
+    //     if(!pkt->req->hasVaddr())
+    //         stats.nonDmNoVaddrReq++;
+    //     else if (pkt->req->getVaddr() < 0x80000000)
+    //         stats.nonDmUserReq++;
+    //     else
+    //         stats.nonDmKernelReq++;
+    // }
 
     DPRINTF(Cache, "%s for %s %s\n", __func__, pkt->print(),
             blk ? "hit " + blk->print() : "miss");
@@ -1731,7 +1819,7 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
         const bool has_old_data = blk && blk->isValid();
         if (!blk) {
             // need to do a replacement
-            blk = allocateBlock(pkt, writebacks);
+            blk = allocateBlock(pkt, writebacks, pkt->req->requestorId(), isDet);
             if (!blk) {
                 // no replaceable block available: give up, fwd to next level.
                 incMissCount(pkt);
@@ -1818,7 +1906,7 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
                 return false;
             } else {
                 // a writeback that misses needs to allocate a new block
-                blk = allocateBlock(pkt, writebacks);
+                blk = allocateBlock(pkt, writebacks, pkt->req->requestorId(), isDet);
                 if (!blk) {
                     // no replaceable block available: give up, fwd to
                     // next level.
@@ -1861,6 +1949,19 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
         updateBlockData(blk, pkt, has_old_data);
         DPRINTF(Cache, "%s new state is %s\n", __func__, blk->print());
 
+        // DM
+        if (system->getWayPartMode() == 2) {
+            DPRINTF(Cache, "Setting deterministic bit to %d for block at %#llx in way %d\n", 
+                    isDet, regenerateBlkAddr(blk), blk->getWay());
+            blk->setDeterministic(isDet);
+            
+            // Verify
+            if (blk->isDeterministic() != isDet) {
+                warn("Deterministic bit setting failed! Expected %d, got %d\n", 
+                    isDet, blk->isDeterministic());
+            }
+        }
+
         incHitCount(pkt);
 
         // A writeback searches for the block, then writes the data
@@ -1877,6 +1978,20 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
     } else if (blk && (pkt->needsWritable() ?
             blk->isSet(CacheBlk::WritableBit) :
             blk->isSet(CacheBlk::ReadableBit))) {
+
+        // DM
+        // if (system->getWayPartMode() == 2) {
+        //     DPRINTF(Cache, "Setting deterministic bit to %d for block at %#llx in way %d\n", 
+        //             isDet, regenerateBlkAddr(blk), blk->getWay());
+        //     blk->setDeterministic(isDet);
+            
+        //     // Verify
+        //     if (blk->isDeterministic() != isDet) {
+        //         warn("Deterministic bit setting failed! Expected %d, got %d\n", 
+        //             isDet, blk->isDeterministic());
+        //     }
+        // }
+        
         // OK to satisfy access
         incHitCount(pkt);
 
@@ -1950,7 +2065,7 @@ BaseCache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks,
 
         // need to do a replacement if allocating, otherwise we stick
         // with the temporary storage
-        blk = allocate ? allocateBlock(pkt, writebacks) : nullptr;
+        blk = allocate ? allocateBlock(pkt, writebacks, pkt->req->requestorId(), pkt->req->isDeterministic()) : nullptr;
 
         if (!blk) {
             // No replaceable block or a mostly exclusive
@@ -1971,6 +2086,19 @@ BaseCache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks,
     assert(blk->isValid());
     assert(blk->isSecure() == is_secure);
     assert(regenerateBlkAddr(blk) == addr);
+
+    // if (system->getWayPartMode() == 2 && pkt && pkt->req) {
+    //     bool isDet = pkt->req->isDeterministic();
+    //     DPRINTF(Cache, "Setting deterministic bit to %d for block at %#llx in way %d\n", 
+    //             isDet, regenerateBlkAddr(blk), blk->getWay());
+    //     blk->setDeterministic(isDet);
+        
+    //     // Verify
+    //     if (blk->isDeterministic() != isDet) {
+    //         warn("Deterministic bit setting failed! Expected %d, got %d\n", 
+    //             isDet, blk->isDeterministic());
+    //     }
+    // }
 
     blk->setCoherenceBits(CacheBlk::ReadableBit);
 
@@ -2027,7 +2155,7 @@ BaseCache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks,
 }
 
 CacheBlk*
-BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
+BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks, RequestorID requestorID, bool isDetermReq)
 {
     // Get address
     const Addr addr = pkt->getAddr();
@@ -2057,6 +2185,22 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
     const auto partition_id = partitionManager ?
         partitionManager->readPacketPartitionID(pkt) : 0;
 
+    // if (system->getWayPartMode() != 0 && isLLC && partitionManager) {
+    //     // Always keep partitioning enabled when way partitioning mode is active
+    //     if (!partitionManager->isPartitioningEnabled()) {
+    //         partitionManager->setPartitioningEnabled(true);
+    //     }
+        
+    //     if (system->getWayPartMode() == 2 && isDetermReq) {
+    //         partitionManager->setDmAssoc(true);  // Set to TRUE for deterministic requests
+    //         DPRINTF(Cache, "Setting dmAssoc to TRUE for deterministic request\n");
+    //     } 
+    // } else if (partitionManager) {
+    //     // Only disable partitioning if way partition mode is completely off
+    //     if (system->getWayPartMode() == 0) {
+    //         partitionManager->setPartitioningEnabled(false);
+    //     }
+    // }
     // Find replacement victim
     std::vector<CacheBlk*> evict_blks;
     CacheBlk *victim = tags->findVictim(addr, is_secure, blk_size_bits,
@@ -2117,7 +2261,7 @@ BaseCache::evictBlock(CacheBlk *blk, PacketList &writebacks)
 }
 
 PacketPtr
-BaseCache::writebackBlk(CacheBlk *blk)
+BaseCache::writebackBlk(CacheBlk *blk, RequestorID requestorID)
 {
     gem5_assert(!isReadOnly || writebackClean,
                 "Writeback from read-only cache");
@@ -2127,11 +2271,16 @@ BaseCache::writebackBlk(CacheBlk *blk)
     stats.writebacks[Request::wbRequestorId]++;
 
     RequestPtr req = std::make_shared<Request>(
-        regenerateBlkAddr(blk), blkSize, 0, Request::wbRequestorId);
+        regenerateBlkAddr(blk), blkSize, 0, requestorID);
 
     if (blk->isSecure())
         req->setFlags(Request::SECURE);
 
+    if (blk->isDeterministic()) {
+        DPRINTF(MyCache, "marking the request as deterministic\n");
+        req->setFlags(Request::DETERMINISTIC);
+    }
+    
     req->taskId(blk->getTaskId());
 
     PacketPtr pkt =
@@ -2757,6 +2906,22 @@ BaseCache::CacheStats::CacheStats(BaseCache &c)
             statistics::units::Rate<statistics::units::Byte, 
                                     statistics::units::Second>::get(),
             "average bandwidth usage per bank in bytes/second"),
+    ADD_STAT(dmHits, statistics::units::Count::get(),
+             "number of deterministic (read+write) hits"),
+    ADD_STAT(dmMisses, statistics::units::Count::get(),
+                "number of deterministic (read+write) misses"),
+    ADD_STAT(dmDemandHits, statistics::units::Count::get(),
+             "number of deterministic (read+write) demand hits"),
+    ADD_STAT(dmDemandMisses, statistics::units::Count::get(),
+                "number of deterministic (read+write) demand misses"),
+    ADD_STAT(dmDemandAccesses, statistics::units::Count::get(),
+             "number of deterministic (read+write) demand accesses"),
+    ADD_STAT(nonDmKernelReq, statistics::units::Count::get(),
+             "number of non-deterministic kernel requests"),
+    ADD_STAT(nonDmUserReq, statistics::units::Count::get(),
+                "number of non-deterministic user requests"),
+    ADD_STAT(nonDmNoVaddrReq, statistics::units::Count::get(),
+             "number of non-deterministic requests without a vaddr"),
     /* ADD_STAT(bankBlockedAverageTicksPerReq, statistics::units::Tick::get(),
              "average ticks before retrying a request from a busy bank"), */
     ADD_STAT(bankCflBusyblkCpuspRead, statistics::units::Count::get(),
@@ -3202,6 +3367,42 @@ BaseCache::CacheStats::regStats()
     
     dataExpansions.flags(nozero | nonan);
     dataContractions.flags(nozero | nonan);
+
+    // DM stats
+    dmHits
+        .init(system->maxRequestors())
+        .flags(total | nozero | nonan);
+    for (int i = 0; i < system->maxRequestors(); i++) {
+        dmHits.subname(i, system->getRequestorName(i));
+    }
+    
+    dmMisses
+        .init(system->maxRequestors())
+        .flags(total | nozero | nonan);
+    for (int i = 0; i < system->maxRequestors(); i++) {
+        dmMisses.subname(i, system->getRequestorName(i));
+    }
+    
+    dmDemandHits
+        .flags(total | nozero | nonan);
+    for (int i = 0; i < system->maxRequestors(); i++) {
+        dmDemandHits.subname(i, system->getRequestorName(i));
+    }
+    dmDemandHits = dmHits;
+    
+    dmDemandMisses
+        .flags(total | nozero | nonan);
+    for (int i = 0; i < system->maxRequestors(); i++) {
+        dmDemandMisses.subname(i, system->getRequestorName(i));
+    }
+    dmDemandMisses = dmMisses;
+    
+    dmDemandAccesses
+        .flags(total | nozero | nonan);
+    for (int i = 0; i < system->maxRequestors(); i++) {
+        dmDemandAccesses.subname(i, system->getRequestorName(i));
+    }
+    dmDemandAccesses = dmDemandHits + dmDemandMisses;
 }
 
 void
@@ -3420,7 +3621,8 @@ bool
 BaseCache::CpuSidePort::recvTimingReq(PacketPtr pkt)
 {
     assert(pkt->isRequest());
-
+    DPRINTF(Cache, "TIMING_DEBUG: %s recvTimingReq: %s addr=0x%x\n", 
+           name().c_str(), pkt->cmdString().c_str(), pkt->getAddr());
     if (cache.system->bypassCaches()) {
         // Just forward the packet if caches are disabled.
         // @todo This should really enqueue the packet rather

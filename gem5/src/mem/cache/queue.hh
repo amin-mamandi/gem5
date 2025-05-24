@@ -58,6 +58,8 @@
 #include "mem/packet.hh"
 #include "sim/cur_tick.hh"
 #include "sim/drain.hh"
+#include "sim/system.hh"
+#include "debug/AMINmshr.hh"
 
 namespace gem5
 {
@@ -101,6 +103,12 @@ class Queue : public Drainable, public Named
     /** Holds non allocated entries. */
     typename Entry::List freeList;
 
+    // Add these member variables for memguard support
+    System *system;
+    bool is_dcache;
+    uint8_t cpu_id;
+    mutable int regulated_mshr_count;
+
     typename Entry::Iterator addToReadyList(Entry* entry)
     {
         if (readyList.empty() ||
@@ -128,7 +136,7 @@ class Queue : public Drainable, public Named
 
 
     /**
-     * Create a queue with a given number of entries.
+     * Create a queue with a given number of entries (original constructor).
      *
      * @param num_entries The number of entries in this queue.
      * @param reserve The extra overflow entries needed.
@@ -138,6 +146,29 @@ class Queue : public Drainable, public Named
         Named(name),
         label(_label), numEntries(num_entries + reserve),
         numReserve(reserve), entries(numEntries, name + ".entry"),
+        system(nullptr), is_dcache(false), cpu_id(0),
+        regulated_mshr_count(num_entries),
+        _numInService(0), allocated(0)
+    {
+        for (int i = 0; i < numEntries; ++i) {
+            freeList.push_back(&entries[i]);
+        }
+    }
+
+    /**
+     * Create a queue with a given number of entries.
+     *
+     * @param num_entries The number of entries in this queue.
+     * @param reserve The extra overflow entries needed.
+     */
+    Queue(const std::string &_label, int num_entries, int reserve,
+            const std::string &name, System *sys, 
+            bool dcache_flag, uint8_t core_id) :
+        Named(name),
+        label(_label), numEntries(num_entries + reserve),
+        numReserve(reserve), entries(numEntries, name + ".entry"),
+        system(sys), is_dcache(dcache_flag), cpu_id(core_id),
+        regulated_mshr_count(num_entries),
         _numInService(0), allocated(0)
     {
         for (int i = 0; i < numEntries; ++i) {
@@ -152,7 +183,24 @@ class Queue : public Drainable, public Named
 
     bool isFull() const
     {
+
+        // temp:
         return (allocated > numEntries - numReserve);
+
+    if (is_dcache && system) {
+            
+            int current_mshr_count = system->getmshrCount(cpu_id);
+            regulated_mshr_count = (current_mshr_count >= 0) ? 
+                                current_mshr_count + numReserve - 1 : 
+                                    numEntries;
+            if (system->use_memguard){
+                DPRINTF(AMINmshr, "MSHR count for core %d: %d, regulated_mshr_count: %d, allocated: %d\n",
+                        cpu_id, current_mshr_count, regulated_mshr_count, allocated);
+            }
+            return (allocated > regulated_mshr_count - numReserve);
+        } else {
+            return (allocated > numEntries - numReserve);
+        }
     }
 
     int numInService() const

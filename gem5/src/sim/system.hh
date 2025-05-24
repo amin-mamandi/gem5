@@ -64,6 +64,7 @@
 #include "sim/sim_object.hh"
 #include "sim/workload.hh"
 #include "kern/system_events.hh"
+#include "debug/MSHRInst.hh"
 
 namespace gem5
 {
@@ -303,18 +304,16 @@ class System : public SimObject, public PCEventScope
     void setMemoryMode(enums::MemoryMode mode);
 
     
-    void setMshr(uint8_t cpu_id, int mshrcount);
-
-    int  getmshrCount(uint8_t cpu_id);
-
-    void  setMemBudget(uint8_t cpu_id, uint64_t budget);
-    uint64_t  getMemBudget(uint8_t cpuid);
-    void  resetMemBudget(uint8_t cpu_id);
-    void enableMemGuard(int use);
-    bool isGuarded();
-    void setWayPartMode(int use);
-    int getWayPartMode();
-    void clearDM(int cpu_id);
+    void setMshr(uint8_t cpu_id, int mshrcount); 
+    int  getmshrCount(uint8_t cpu_id); 
+    void  setMemBudget(uint8_t cpu_id, uint64_t budget); 
+    uint64_t  getMemBudget(uint8_t cpuid); 
+    void  resetMemBudget(uint8_t cpu_id); 
+    void enableMemGuard(int use); 
+    bool isGuarded(); 
+    void setWayPartMode(int use); 
+    int getWayPartMode(); 
+    void clearDM(int cpu_id); 
 
     /** @} */
 
@@ -453,15 +452,55 @@ class System : public SimObject, public PCEventScope
 
   public:
 
+    /**
+     * Memory budget per CPU (requests allowed from reserved banks).
+     */
     uint64_t memoryBudget[4];
+
+    /**
+     * Initial memory budget per CPU (for reset).
+     */
     uint64_t budgetInit[4];
+
+    /**
+     * Initial cycle per CPU (for budget reset).
+     */
     uint64_t cycleInit[4];
+
+    /**
+     * Memguard enabled per CPU.
+     */
     bool guard[4];
+
+    /**
+     * Memguard enabled for the system.
+     */
     int use_memguard;
+
+    /**
+     * MSHR count switched per CPU.
+     */
     bool switched_mshr_count[4];
+
+    /**
+     * System-wide clear deterministic memory flag.
+     */
     bool clearDmFlag;
+
+    /**
+     * CPU ID for clear deterministic memory.
+     */
     int clearDmCpuId;
+
+    /**
+     * Reserved bank mask.
+     */
     uint64_t medusaReservedBankMask;
+
+    /**
+     * Max requests served from reserved banks.
+     */
+    // uint64_t dm_req_srv_thresh = 30;
 
     /**
      * Request an id used to create a request object in the system. All objects
@@ -529,18 +568,17 @@ class System : public SimObject, public PCEventScope
     /** Get the number of requestors registered in the system */
     RequestorID maxRequestors() { return requestors.size(); }
 
-    
     int getCpuId(RequestorID requestor_id)
     {
       // Get the requestor name
       std::string requestorName = getRequestorName(requestor_id);
       
-      // Use a simpler approach with pairs
+      // Use a simple approach with pairs
       static const std::pair<std::string, int> cpuPatterns[] = {
-          {"cpu0", 0}, {"cpus0", 0},
-          {"cpu1", 1}, {"cpus1", 1},
-          {"cpu2", 2}, {"cpus2", 2},
-          {"cpu3", 3}, {"cpus3", 3}
+        {"core0", 0}, {"cores0", 0},
+        {"core1", 1}, {"cores1", 1},
+        {"core2", 2}, {"cores2", 2},
+        {"core3", 3}, {"cores3", 3}
       };
       
       // Check if the requestor name contains any of the patterns

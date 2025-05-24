@@ -1,0 +1,13 @@
+diff --git a/gem5/src/mem/DRAMInterface.py b/gem5/src/mem/DRAMInterface.py
+index dea62a6be1..a9862ed744 100644
+--- a/gem5/src/mem/DRAMInterface.py
++++ b/gem5/src/mem/DRAMInterface.py
+@@ -56,6 +56,8 @@ class DRAMInterface(MemInterface):
+     # scheduler page policy
+     page_policy = Param.PageManage("open_adaptive", "Page management policy")
+ 
++    rows_1 = Param.Unsigned('32', "Number of rows comes first (LSB) in the"\
++                            "mapping for RoRaBaRoChCo")
+     # enforce a limit on the number of accesses per row
+     max_accesses_per_row = Param.Unsigned(
+         16, "Max accesses per row before closing"
