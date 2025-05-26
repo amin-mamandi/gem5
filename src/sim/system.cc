@@ -181,7 +181,17 @@ System::System(const Params &p)
       _m5opRange(p.m5ops_base ?
                  RangeSize(p.m5ops_base, 0x10000) :
                  AddrRange(1, 0)), // Create an empty range if disabled
-      redirectPaths(p.redirect_paths)
+      redirectPaths(p.redirect_paths),
+      mshrCount{-1, -1, -1, -1},
+      wayPartMode(1),
+      memoryBudget{0, 0, 0, 0},
+      budgetInit{0, 0, 0, 0},
+      cycleInit{0, 0, 0, 0},
+      guard{false, false, false, false},
+      use_memguard(0),
+      switched_mshr_count{false, false, false, false},
+      clearDmFlag(0),
+      medusaReservedBankMask(0)
 {
     panic_if(!workload, "No workload set for system %s "
             "(could use StubWorkload?).", name());
@@ -231,6 +241,82 @@ System::setMemoryMode(enums::MemoryMode mode)
 {
     assert(drainState() == DrainState::Drained);
     memoryMode = mode;
+}
+
+
+void
+System::setMshr(uint8_t cpu_id, int mshrcount)
+{
+    DPRINTF(MSHRInst, "In system, value of cpu_id = %d and mshrcount = %d\n", 
+            cpu_id, mshrcount);
+    if (mshrcount == -1 || (mshrCount[cpu_id] != -1 
+                           && mshrcount > mshrCount[cpu_id])){
+        DPRINTF(MSHRInst, "setting switched_mshr_count[%d] = true\n", cpu_id);
+        switched_mshr_count[cpu_id] = true;
+    }
+    mshrCount[cpu_id] = mshrcount;
+}
+
+int
+System::getmshrCount(uint8_t cpu_id)
+{
+    return mshrCount[cpu_id];
+}
+
+void
+System::setMemBudget(uint8_t cpu_id, uint64_t budget)
+{
+    DPRINTF(MSHRInst, "In system, value of cpu_id = %d and budget = %d\n", 
+            cpu_id, budget);
+    memoryBudget[cpu_id] = budget;
+    budgetInit[cpu_id] = budget;
+}
+
+void
+System::resetMemBudget(uint8_t cpu_id)
+{
+    DPRINTF(MSHRInst, "For cpu_id %d, budget left = %d\n", 
+            cpu_id, memoryBudget[cpu_id]);
+    memoryBudget[cpu_id] = budgetInit[cpu_id];
+    setMshr(cpu_id, -1);
+}
+
+void
+System::enableMemGuard(int use)
+{
+    use_memguard = use;
+}
+
+bool
+System::isGuarded()
+{
+    if (guard[0] || guard[1] || guard[2] || guard[3])
+        return true;
+    else
+        return false;
+}
+
+void
+System::setWayPartMode(int use) {
+
+    /**
+     * 0: partitioning disabled
+     * 1: simple Way-based partitioning
+     * 2: deterministic memory replacement policy
+    */
+    wayPartMode = use;
+}
+
+int
+System::getWayPartMode() {
+    return wayPartMode;
+}
+
+void
+System::clearDM(int cpu_id)
+{
+    clearDmFlag = true;
+    clearDmCpuId = cpu_id;
 }
 
 void

@@ -78,9 +78,9 @@ NoncoherentCache::satisfyRequest(PacketPtr pkt, CacheBlk *blk, bool, bool)
 
 bool
 NoncoherentCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
-                         PacketList &writebacks)
+                         PacketList &writebacks, bool is_deterministic)
 {
-    bool success = BaseCache::access(pkt, blk, lat, writebacks);
+    bool success = BaseCache::access(pkt, blk, lat, writebacks, is_deterministic);
 
     if (pkt->isWriteback() || pkt->cmd == MemCmd::WriteClean) {
         assert(blk && blk->isValid());
@@ -129,6 +129,14 @@ NoncoherentCache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk,
     assert(mshr || !blk || !blk->isValid());
 
     BaseCache::handleTimingReqMiss(pkt, mshr, blk, forward_time, request_time);
+}
+
+bool
+NoncoherentCache::unblockCache()
+{
+    // We are a non-coherent cache and therefore we do not have
+    // anything to unblock.
+    return false;
 }
 
 void

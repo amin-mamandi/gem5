@@ -60,6 +60,7 @@
 #include "mem/packet.hh"
 #include "params/BaseTags.hh"
 #include "sim/clocked_object.hh"
+#include "debug/DetTags.hh"
 
 namespace gem5
 {
@@ -158,6 +159,11 @@ class BaseTags : public ClockedObject
         statistics::Scalar tagAccesses;
         /** Number of data blocks consulted over all accesses. */
         statistics::Scalar dataAccesses;
+
+        // statistics::Vector determ_replacements;
+        // statistics::Vector determ_blks;
+        // statistics::Vector avg_determ_blks;
+        
     } stats;
 
   public:
@@ -181,6 +187,13 @@ class BaseTags : public ClockedObject
      * exits.
      */
     void cleanupRefs();
+
+    /**
+     * Clear the deterministic bit for blocks in the specified way range.
+     * @param lowerWay Lower bound of the way range.
+     * @param upperWay Upper bound of the way range.
+     */
+    void clearDeterministicBits(int lowerWay, int upperWay);
 
     /**
      * Computes stats just prior to dump event
@@ -240,6 +253,19 @@ class BaseTags : public ClockedObject
     }
 
     /**
+     * Set deterministic associativity.
+     */
+     virtual void setDmAssoc(bool dmAssocArg)
+     {
+         panic("This tag class does not implement deterministic way allocation limit!\n");
+     }
+     
+     virtual void clearDM(int lowerWay, int upperWay)
+     {
+         panic("This tag class does not implement deterministic bit clearing!\n");
+     }
+
+    /**
      * Get the way allocation mask limit.
      * @return The maximum number of ways available for replacement.
      */
@@ -285,7 +311,7 @@ class BaseTags : public ClockedObject
     virtual CacheBlk* findVictim(const CacheBlk::KeyType &key,
                                  const std::size_t size,
                                  std::vector<CacheBlk*>& evict_blks,
-                                 const uint64_t partition_id=0) = 0;
+                                 const uint64_t partition_id) = 0;
 
     /**
      * Access block and update replacement data. May not succeed, in which case

@@ -57,6 +57,7 @@
 #include "mem/protocol/functional.hh"
 #include "mem/protocol/timing.hh"
 #include "sim/port.hh"
+#include "debug/DetPort.hh"
 
 namespace gem5
 {
@@ -239,6 +240,16 @@ class RequestPort: public Port, public AtomicRequestProtocol,
             MemBackdoorPtr &backdoor);
 
   public:
+
+    /**
+     * Attempt to unblock the connected cache.
+     * This provides a way for the requestor to signal that 
+     * any blocking conditions should be cleared.
+     *
+     * @return true if unblock was successful, false otherwise
+     */
+    virtual bool unblockCache();
+
     /* The timing protocol. */
 
     /**
@@ -348,6 +359,17 @@ class ResponsePort : public Port, public AtomicResponseProtocol,
     public TimingResponseProtocol, public FunctionalResponseProtocol
 {
     friend class RequestPort;
+
+  public:
+
+    /**
+     * Handle unblock requests from connected request port.
+     * Default implementation does nothing.
+     */
+    virtual bool handleUnblockRequest() { 
+        panic("ResponsePort::handleUnblockRequest: unblock not supported\n");
+        return false; 
+    }
 
   private:
     RequestPort* _requestPort;

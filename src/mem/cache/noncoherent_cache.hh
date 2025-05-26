@@ -69,7 +69,7 @@ class NoncoherentCache : public BaseCache
 {
   protected:
     bool access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
-                PacketList &writebacks) override;
+                PacketList &writebacks, bool isDet) override;
 
     void handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk,
                              Tick forward_time,
@@ -90,6 +90,8 @@ class NoncoherentCache : public BaseCache
     void recvTimingSnoopReq(PacketPtr pkt) override {
         panic("Unexpected timing snoop request %s", pkt->print());
     }
+
+    bool unblockCache() override;
 
     void recvTimingSnoopResp(PacketPtr pkt) override {
         panic("Unexpected timing snoop response %s", pkt->print());

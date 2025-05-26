@@ -109,6 +109,11 @@ class CacheBlk : public TaggedEntry
      */
     Tick whenReady = 0;
 
+    /**
+     * whether it is allocated for a deterministic request
+     */
+    bool deterministic = false;
+
   protected:
     /**
      * Represents that the indicated thread context has a "lock" on
@@ -212,6 +217,7 @@ class CacheBlk : public TaggedEntry
         setRefCount(0);
         setSrcRequestorId(Request::invldRequestorId);
         lockList.clear();
+        setDeterministic(false);
     }
 
     /**
@@ -259,6 +265,24 @@ class CacheBlk : public TaggedEntry
 
     /** Marks this blocks as a recently prefetched block. */
     void setPrefetched() { _prefetched = true; }
+
+    /**
+        * is this block a deterministic memory block?
+        * @return True if the block is deterministic memory.
+     */
+    bool isDeterministic() const
+    {
+        return deterministic;
+    }
+
+    /**
+     * Set the block as a deterministic memory block.
+     * @param det True if the block is deterministic memory.
+     */
+    void setDeterministic(bool det)
+    {
+        deterministic = det;
+    }
 
     /**
      * Get tick at which block's data will be available for access.
@@ -407,9 +431,9 @@ class CacheBlk : public TaggedEntry
           default:    s = 'T'; break; // @TODO add other types
         }
         return csprintf("state: %x (%c) writable: %d readable: %d "
-            "dirty: %d prefetched: %d | %s", coherence, s,
+            "dirty: %d prefetched: %d | %s deterministic: %d", coherence, s,
             isSet(WritableBit), isSet(ReadableBit), isSet(DirtyBit),
-            wasPrefetched(), TaggedEntry::print());
+            wasPrefetched(), TaggedEntry::print(), deterministic);
     }
 
     /**

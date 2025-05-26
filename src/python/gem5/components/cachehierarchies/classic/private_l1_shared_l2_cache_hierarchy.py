@@ -33,7 +33,11 @@ from m5.objects import (
     L2XBar,
     Port,
     SystemXBar,
+    PartitionManager,
+    WayPartitioningPolicy,
+    WayPolicyAllocation,
 )
+
 
 from ....isas import ISA
 from ....utils.override import *
@@ -82,9 +86,9 @@ class PrivateL1SharedL2CacheHierarchy(
         membus: Optional[BaseXBar] = None,
     ) -> None:
         """
-        :param l1d_size: The size of the L1 Data Cache (e.g., "32KiB").
-        :param  l1i_size: The size of the L1 Instruction Cache (e.g., "32KiB").
-        :param l2_size: The size of the L2 Cache (e.g., "256KiB").
+        :param l1d_size: The size of the L1 Data Cache (e.g., "32kB").
+        :param  l1i_size: The size of the L1 Instruction Cache (e.g., "32kB").
+        :param l2_size: The size of the L2 Cache (e.g., "256kB").
         :param l1d_assoc: The associativity of the L1 Data Cache.
         :param l1i_assoc: The associativity of the L1 Instruction Cache.
         :param l2_assoc: The associativity of the L2 Cache.
@@ -119,7 +123,7 @@ class PrivateL1SharedL2CacheHierarchy(
         # Set up the system port for functional access from the simulator.
         board.connect_system_port(self.membus.cpu_side_ports)
 
-        for _, port in board.get_mem_ports():
+        for _, port in board.get_memory().get_mem_ports():
             self.membus.mem_side_ports = port
 
         self.l1icaches = [
@@ -127,15 +131,57 @@ class PrivateL1SharedL2CacheHierarchy(
                 size=self._l1i_size,
                 assoc=self._l1i_assoc,
                 writeback_clean=False,
+                cpu_id=i,
             )
             for i in range(board.get_processor().get_num_cores())
         ]
         self.l1dcaches = [
-            L1DCache(size=self._l1d_size, assoc=self._l1d_assoc)
+            L1DCache(size=self._l1d_size, assoc=self._l1d_assoc, cpu_id=i)
             for i in range(board.get_processor().get_num_cores())
         ]
         self.l2bus = L2XBar()
-        self.l2cache = L2Cache(size=self._l2_size, assoc=self._l2_assoc)
+        # Define way partitioning allocations
+        num_cores = board.get_processor().get_num_cores()
+        l2_assoc = self._l2_assoc
+       
+        # Define way allocations for partitioning
+        way_allocations = []
+        num_cores = board.get_processor().get_num_cores()
+        ways_per_core = 16 // num_cores  # Assuming assoc=16
+
+        for i in range(num_cores):
+            # Calculate ways for this core
+            starting_way = i * ways_per_core
+            core_ways = [w for w in range(starting_way, starting_way + ways_per_core)]
+            
+            # Create allocation
+            way_allocations.append({
+                "partition_id": i,
+                "ways": core_ways
+            })
+
+        # Create WayPolicyAllocation objects
+        allocations = []
+        for alloc in way_allocations:
+            allocations.append(
+                WayPolicyAllocation(
+                    partition_id=alloc["partition_id"],
+                    ways=alloc["ways"]
+                )
+            )
+
+        # Create partitioning policy
+        policy = WayPartitioningPolicy(allocations=allocations)
+
+        # Create partition manager
+        partition_manager = PartitionManager(
+            partitioning_policies=[policy]
+        )
+
+
+        self.l2cache = L2Cache(size=self._l2_size, assoc=self._l2_assoc, 
+                               partitioning_manager=partition_manager,
+                               is_LLC= True)
         # ITLB Page walk caches
         self.iptw_caches = [
             MMUCache(size="8KiB", writeback_clean=False)
@@ -181,7 +227,7 @@ class PrivateL1SharedL2CacheHierarchy(
             data_latency=50,
             response_latency=50,
             mshrs=20,
-            size="1KiB",
+            size="1kB",
             tgts_per_mshr=12,
             addr_ranges=board.mem_ranges,
         )

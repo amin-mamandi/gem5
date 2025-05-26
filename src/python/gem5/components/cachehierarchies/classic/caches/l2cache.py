@@ -24,13 +24,16 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from typing import Type
+from typing import Type, List, Optional
 
 from m5.objects import (
     BasePrefetcher,
     Cache,
     Clusivity,
     StridePrefetcher,
+    PartitionManager,
+    WayPartitioningPolicy,
+    WayPolicyAllocation,
 )
 
 from .....utils.override import *
@@ -48,11 +51,13 @@ class L2Cache(Cache):
         tag_latency: int = 10,
         data_latency: int = 10,
         response_latency: int = 1,
-        mshrs: int = 20,
+        mshrs: int = 32,
         tgts_per_mshr: int = 12,
         writeback_clean: bool = False,
         clusivity: Clusivity = "mostly_incl",
         PrefetcherCls: Type[BasePrefetcher] = StridePrefetcher,
+        is_LLC: bool = True,
+        partitioning_manager = None,  # Add this parameter
     ):
         super().__init__()
         self.size = size
@@ -65,3 +70,8 @@ class L2Cache(Cache):
         self.writeback_clean = writeback_clean
         self.clusivity = clusivity
         self.prefetcher = PrefetcherCls()
+        self.is_LLC = True
+
+        # Add this line to set the partitioning manager
+        if partitioning_manager:
+            self.partitioning_manager = partitioning_manager

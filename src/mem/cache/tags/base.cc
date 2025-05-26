@@ -140,6 +140,28 @@ BaseTags::moveBlock(CacheBlk *src_blk, CacheBlk *dest_blk)
     assert(!src_blk->isValid());
 }
 
+void
+BaseTags::clearDeterministicBits(int lowerWay, int upperWay)
+{
+    int cleared = 0;
+    DPRINTF(DetTags, "Clearing deterministic bits for ways %d to %d\n", 
+            lowerWay, upperWay);
+    
+    // Use anyBlk to iterate through all blocks
+    anyBlk([this, lowerWay, upperWay, &cleared](CacheBlk &blk) {
+        int way = blk.getWay();
+        if (way >= lowerWay && way <= upperWay && blk.isDeterministic()) {
+            DPRINTF(DetTags, "Clearing deterministic bit for block at %#llx in way %d\n", 
+                    regenerateBlkAddr(&blk), way);
+            blk.setDeterministic(false);
+            cleared++;
+        }
+        return false; // Continue iteration (return true would stop iteration)
+    });
+    
+    DPRINTF(DetTags, "Cleared deterministic bits for %d blocks\n", cleared);
+}
+
 Addr
 BaseTags::extractTag(const Addr addr) const
 {

@@ -44,6 +44,7 @@
 #include "mem/request.hh"
 #include "params/RiscvTLB.hh"
 #include "sim/sim_object.hh"
+#include "debug/DetTLB.hh"
 
 namespace gem5
 {

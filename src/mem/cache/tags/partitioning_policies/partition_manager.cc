@@ -70,6 +70,55 @@ PartitionManager::notifyRelease(uint64_t partition_id)
 }
 
 void
+PartitionManager::clearDM(uint64_t partition_id, int lowerWay, int upperWay)
+{
+    for (auto policy : partitioningPolicies) {
+        if (auto way_policy = dynamic_cast<partitioning_policy::WayPartitioningPolicy*>(policy)) {
+            way_policy->clearDM(partition_id, lowerWay, upperWay);
+        }
+    }
+}
+
+void 
+PartitionManager::setDmAssoc(bool dmAssoc)
+{
+    for (auto policy : partitioningPolicies) {
+        if (auto way_policy = dynamic_cast<partitioning_policy::WayPartitioningPolicy*>(policy)) {
+            way_policy->setDmAssoc(dmAssoc);
+        }
+    }
+}
+
+void 
+PartitionManager::setupNoPartitioning()
+{
+    for (auto policy : partitioningPolicies) {
+        if (auto way_policy = dynamic_cast<partitioning_policy::WayPartitioningPolicy*>(policy)) {
+            way_policy->setupNoPartitioning();
+        }
+    }
+}
+
+void
+PartitionManager::setupPartitioning()
+{
+    for (auto policy : partitioningPolicies) {
+        if (auto way_policy = dynamic_cast<partitioning_policy::WayPartitioningPolicy*>(policy)) {
+            way_policy->setupPartitioning();
+        }
+    }
+}
+
+void 
+PartitionManager::setCache(BaseTags *cache_ptr)
+{
+    for (auto partitioning_policy : partitioningPolicies) {
+        if (auto way_policy = dynamic_cast<partitioning_policy::WayPartitioningPolicy*>(partitioning_policy)) {
+            way_policy->setCache(cache_ptr);
+        }
+    }
+}
+void
 PartitionManager::filterByPartition(
     std::vector<ReplaceableEntry *> &entries,
     const uint64_t partition_id) const

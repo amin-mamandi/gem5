@@ -45,9 +45,13 @@
 #include "mem/cache/replacement_policies/replaceable_entry.hh"
 #include "mem/cache/tags/partitioning_policies/base_pp.hh"
 #include "params/WayPartitioningPolicy.hh"
+#include "debug/DetPart.hh"
+#include "mem/cache/tags/base.hh"
 
 namespace gem5
 {
+
+class BaseTags;
 
 namespace partitioning_policy
 {
@@ -65,6 +69,8 @@ class WayPartitioningPolicy : public BasePartitioningPolicy
   public:
     WayPartitioningPolicy(const WayPartitioningPolicyParams &params);
 
+    void setCache(BaseTags *cache_ptr) { cache = cache_ptr; }
+    
     void
     filterByPartition(std::vector<ReplaceableEntry *> &entries,
                         const uint64_t partition_id) const override;
@@ -88,12 +94,48 @@ class WayPartitioningPolicy : public BasePartitioningPolicy
     void addWayToPartition(uint64_t partition_id, unsigned way);
     void removeWayToPartition(uint64_t partition_id, unsigned way);
 
+    /**
+     * Clear deterministic bits for all blocks in a way range
+     * @param partition_id The partition to clear
+     * @param lowerWay Lower bound of ways to clear
+     * @param upperWay Upper bound of ways to clear
+     */
+    void
+    clearDM(uint64_t partition_id, int lowerWay, int upperWay) override;
+
+    void
+    setDmAssoc(bool dmAssoc) override
+    {
+        this->dmAssoc = dmAssoc;
+        // DPRINTF(DetPart, "Setting dmAssoc to %d\n", dmAssoc);
+    }
+
+    /**
+     * Disable partitioning
+     */
+    void setupNoPartitioning();
+
+    /**
+     * Enable partitioning
+     */
+    void setupPartitioning();
+
   private:
     /**
     * Map of policied PartitionIDs and their associated cache ways
     */
     std::unordered_map< uint64_t, std::unordered_set< unsigned > >
         partitionIdWays;
+
+    /** Cache pointer */
+    BaseTags *cache;
+
+    /** Cache associativity */
+    const unsigned assoc;
+
+    bool dmAssoc = false;
+
+    bool partitioningEnabled = true;
 };
 
 } // namespace partitioning_policy

@@ -49,6 +49,8 @@
 #include "mem/drampower.hh"
 #include "mem/mem_interface.hh"
 #include "params/DRAMInterface.hh"
+#include "debug/DetMem.hh"
+#include "sim/system.hh"
 
 namespace gem5
 {
@@ -663,6 +665,9 @@ class DRAMInterface : public MemInterface
     }
 
   public:
+
+    uint64_t dm_req_srv_thresh = 300;
+
     /**
      * Initialize the DRAM interface and verify parameters
      */

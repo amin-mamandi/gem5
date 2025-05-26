@@ -53,6 +53,7 @@
 #include "sim/clocked_object.hh"
 #include "sim/faults.hh"
 #include "sim/system.hh"
+#include "debug/DetPTW.hh"
 
 namespace gem5
 {

@@ -41,6 +41,9 @@
 #include "mem/packet.hh"
 #include "params/PartitionManager.hh"
 #include "sim/sim_object.hh"
+#include "mem/cache/tags/partitioning_policies/way_pp.hh"
+#include "mem/request.hh"
+#include "debug/DetPart.hh"
 
 namespace gem5
 {
@@ -54,6 +57,10 @@ class BasePartitioningPolicy;
 
 class PartitionManager : public SimObject
 {
+  private:
+
+    partitioning_policy::WayPartitioningPolicy* wayPolicy = nullptr;
+
   public:
     PARAMS(PartitionManager);
     PartitionManager(const Params &p);
@@ -68,7 +75,20 @@ class PartitionManager : public SimObject
     virtual uint64_t
     readPacketPartitionID(PacketPtr pkt) const
     {
-        return 0;
+        // return 0;
+
+    
+      // Default to using CPU ID 0
+      int cpu_id = 0;
+      
+      // If this request has a context ID, use it directly
+      if (pkt->req->hasContextId()) {
+          cpu_id = pkt->req->contextId();
+          // DPRINTF(DetPart, "Using context ID %d as partition ID\n", cpu_id);
+      }
+      
+      return cpu_id;
+      
     };
 
     /**
@@ -81,6 +101,12 @@ class PartitionManager : public SimObject
 
     void filterByPartition(std::vector<ReplaceableEntry *> &entries,
         const uint64_t partition_id) const;
+
+    void clearDM(uint64_t partition_id, int lowerWay, int upperWay);
+    void setDmAssoc(bool dmAssoc);
+    void setupNoPartitioning();
+    void setupPartitioning();
+    void setCache(BaseTags *cache_ptr);
 
   protected:
     /** Partitioning policies */

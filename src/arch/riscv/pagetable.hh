@@ -62,10 +62,12 @@ const Addr LEVEL_BITS  = 9;
 const Addr LEVEL_MASK  = (1 << LEVEL_BITS) - 1;
 
 BitUnion64(PTESv39)
+    Bitfield<54>     mt;  // for deterministic memory
     Bitfield<53, 10> ppn;
     Bitfield<53, 28> ppn2;
     Bitfield<27, 19> ppn1;
     Bitfield<18, 10> ppn0;
+    Bitfield<9, 8>   rsw;
     Bitfield<7> d;
     Bitfield<6> a;
     Bitfield<5> g;
@@ -89,6 +91,8 @@ typedef Trie<Addr, TlbEntry> TlbEntryTrie;
 
 struct TlbEntry : public Serializable
 {
+    bool deterministic;
+
     // The base of the physical page.
     Addr paddr;
 
@@ -107,8 +111,14 @@ struct TlbEntry : public Serializable
     uint64_t lruSeq;
 
     TlbEntry()
-        : paddr(0), vaddr(0), logBytes(0), pte(), lruSeq(0)
+        : deterministic(false), paddr(0), vaddr(0), logBytes(0), pte(), lruSeq(0)
     {}
+
+    // Check if this page is deterministic memory
+    bool isDetMemory() const
+    {   
+        return (pte.mt) || deterministic;
+    }
 
     // Return the page size in bytes
     Addr size() const

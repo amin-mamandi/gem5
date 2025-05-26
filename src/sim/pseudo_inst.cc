@@ -354,6 +354,61 @@ dumpresetstats(ThreadContext *tc, Tick delay, Tick period)
 }
 
 void
+setmshr(ThreadContext *tc, uint64_t cpu_id, uint64_t mshr_value)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::setmshr(%i, %i)\n", cpu_id, mshr_value);
+    System *sys = tc->getSystemPtr();
+    sys->setMshr(cpu_id, mshr_value);
+}
+
+void
+enablewaypart(ThreadContext *tc, uint64_t use)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::enablewaypart(%i)\n", use);
+    System *sys = tc->getSystemPtr();
+    sys->setWayPartMode(use);
+}
+
+void
+setmembudget(ThreadContext *tc, uint64_t cpu_id, uint64_t mem_budget)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::setmembudget(%i, %i)\n", cpu_id, mem_budget);
+    System *sys = tc->getSystemPtr();
+    sys->setMemBudget(cpu_id, mem_budget);
+}
+
+void
+enablememguard(ThreadContext *tc, uint64_t enable_value)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::enablememguard(%i)\n", enable_value);
+    System *sys = tc->getSystemPtr();
+    sys->enableMemGuard(enable_value);
+}
+
+void
+cleardm(ThreadContext *tc, uint64_t cpu_id)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::cleardm(%i)\n", cpu_id);
+    System *sys = tc->getSystemPtr();
+    sys->clearDM(cpu_id);
+}
+
+void
+m5exitinst(ThreadContext *tc, uint64_t n_inst)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::m5exitinst(%i)\n", n_inst);
+    panic("m5exitinst is not implemented yet\n");
+}
+
+void
+medusa(ThreadContext *tc, uint64_t use)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::medusa(%i)\n", use);
+    System *sys = tc->getSystemPtr();
+    sys->medusaReservedBankMask = (uint64_t(1) << use) - 1;
+}
+
+void
 m5checkpoint(ThreadContext *tc, Tick delay, Tick period)
 {
     DPRINTF(PseudoInst, "pseudo_inst::m5checkpoint(%i, %i)\n", delay, period);
