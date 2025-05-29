@@ -47,7 +47,7 @@ TlbEntry::serialize(CheckpointOut &cp) const
     SERIALIZE_SCALAR(asid);
     SERIALIZE_SCALAR(pte);
     SERIALIZE_SCALAR(lruSeq);
-    SERIALIZE_SCALAR(deterministic); 
+    SERIALIZE_SCALAR(deterministic);
 }
 
 void
@@ -59,7 +59,7 @@ TlbEntry::unserialize(CheckpointIn &cp)
     UNSERIALIZE_SCALAR(asid);
     UNSERIALIZE_SCALAR(pte);
     UNSERIALIZE_SCALAR(lruSeq);
-    UNSERIALIZE_SCALAR(deterministic); 
+    UNSERIALIZE_SCALAR(deterministic);
 }
 
 Addr

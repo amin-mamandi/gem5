@@ -196,28 +196,39 @@ BaseCache::CacheResponsePort::processSendRetry()
 bool
 BaseCache::CacheResponsePort::handleUnblockRequest()
 {
-    // panic("never get here!");
-    bool did_unblock = false;
-    
-    // Handle memguard unblocking
-    if (cache.system->use_memguard && cache.is_dcache) {
-        if (cache.system->switched_mshr_count[cache.cpu_id]) {
-            DPRINTF(DetCache, "Memguard reset detected for CPU %d\n", cache.cpu_id);
-            cache.system->switched_mshr_count[cache.cpu_id] = false;
-            did_unblock = true;  // Mark that we handled memguard reset
-        }
-    }
-    
-    // Only do standard unblocking if we didn't handle memguard AND cache is blocked
-    if (isBlocked() && !did_unblock) {
-        DPRINTF(DetCache, "Standard cache unblock\n");
+
+    if (isBlocked()) {
+        DPRINTF(DetCache, "Unblock request received, resetting blocked state\n");
         cache.clearBlocked(Blocked_NoMSHRs);
-        did_unblock = true;
-    } else if (did_unblock && !isBlocked()) {
-        DPRINTF(DetCache, "Memguard reset but cache already unblocked\n");
+        return true;
     }
-    
-    return did_unblock;
+    else
+        return false;
+    // bool did_unblock = false;
+
+    // // Handle memguard unblocking
+    // if (cache.system->use_memguard && cache.is_dcache) {
+    //     if (system->pendingUnblock[cache.cpu_id]) {
+    //         DPRINTF(DetCache, "handleUnblockRequest == reset unblock flag\n");
+    //         cache.system->clearUnblockFlag(cache.cpu_id);
+    //         did_unblock = true;  // Mark that we handled memguard reset
+    //         if (isBlocked())
+    //             cache.clearBlocked(Blocked_NoMSHRs);
+    //         return true;  // Indicate we handled the unblock request
+    //     }
+    // }
+
+    // // Only do standard unblocking if
+    // // we didn't handle memguard AND cache is blocked
+    // if (isBlocked() && !did_unblock) {
+    //     DPRINTF(DetCache, "Standard cache unblock\n");
+    //     cache.clearBlocked(Blocked_NoMSHRs);
+    //     did_unblock = true;
+    // } else if (did_unblock && !isBlocked()) {
+    //     DPRINTF(DetCache, "Memguard reset but cache already unblocked\n");
+    // }
+
+    // return did_unblock;
 }
 
 Addr
@@ -709,7 +720,7 @@ BaseCache::recvAtomic(PacketPtr pkt)
           panic("Deterministic bit clearing just works for CPU 0");
         system->clearDmFlag = false;
     }
-    
+
     // We use lookupLatency here because it is used to specify the latency
     // to access.
     Cycles lat = lookupLatency;
@@ -1558,13 +1569,14 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
         // DM
         if (system->getWayPartMode() == 2) {
             if(isDet)
-                DPRINTF(XALA, "Setting deterministic bit to %d for block at %#llx in way %d\n", 
+                DPRINTF(XALA, "Setting deterministic bit to %d for"
+                    "block at %#llx in way %d\n",
                         isDet, regenerateBlkAddr(blk), blk->getWay());
             blk->setDeterministic(isDet);
-            
+
             // Verify
             if (blk->isDeterministic() != isDet) {
-                warn("Deterministic bit setting failed! Expected %d, got %d\n", 
+                warn("Deterministic bit setting failed! Expected %d, got %d\n",
                     isDet, blk->isDeterministic());
             }
         }
@@ -1586,17 +1598,18 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
         // DM
         if (system->getWayPartMode() == 2) {
             if(isDet)
-                DPRINTF(DetCache, "Setting deterministic bit to %d for block at %#llx in way %d\n", 
+                DPRINTF(DetCache, "Setting deterministic bit to %d "
+                        "for block at %#llx in way %d\n",
                         isDet, regenerateBlkAddr(blk), blk->getWay());
             blk->setDeterministic(isDet);
-            
+
             // Verify
             if (blk->isDeterministic() != isDet) {
-                warn("Deterministic bit setting failed! Expected %d, got %d\n", 
-                    isDet, blk->isDeterministic());
+                warn("Deterministic bit setting failed! Expected %d,"
+                     "got %d\n", isDet, blk->isDeterministic());
             }
         }
-        
+
         // OK to satisfy access
         incHitCount(pkt);
 
@@ -1692,13 +1705,14 @@ BaseCache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks,
     if (system->getWayPartMode() == 2 && pkt && pkt->req) {
         bool isDet = pkt->req->isDeterministic();
         if (isDet)
-            DPRINTF(XALA, "Setting deterministic bit to %d for block at %#llx in way %d\n", 
-                    isDet, regenerateBlkAddr(blk), blk->getWay());  
+            DPRINTF(XALA, "Setting deterministic bit to %d for block"
+                " at %#llx in way %d\n",
+                    isDet, regenerateBlkAddr(blk), blk->getWay());
         blk->setDeterministic(isDet);
-        
+
         // Verify
         if (blk->isDeterministic() != isDet) {
-            warn("Deterministic bit setting failed! Expected %d, got %d\n", 
+            warn("Deterministic bit setting failed! Expected %d, got %d\n",
                 isDet, blk->isDeterministic());
         }
     }
@@ -1790,7 +1804,7 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks, bool isDet
 
     if (partitionManager) {
         int wayPartMode = system->getWayPartMode();
-        
+
         switch (wayPartMode) {
             case 0:
                 partitionManager->setupNoPartitioning();
@@ -1835,11 +1849,11 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks, bool isDet
         compressor->setDecompressionLatency(victim, decompression_lat);
     }
 
-    // For mode 2, set deterministic bit for partition 0 (core 0)
-    if (system->getWayPartMode() == 2 && partition_id == 0 && victim) {
-        victim->setDeterministic(isDetermReq);
-        DPRINTF(XALA, "Mode 2: Set deterministic bit to %d for partition 0 block\n", isDetermReq);
-    }
+    // // For mode 2, set deterministic bit for partition 0 (core 0)
+    // if (system->getWayPartMode() == 2 && partition_id == 0 && victim) {
+    //     victim->setDeterministic(isDetermReq);
+    //     DPRINTF(XALA, "Mode 2: Set deterministic bit to %d for partition 0 block\n", isDetermReq);
+    // }
 
     return victim;
 }
@@ -1893,7 +1907,7 @@ BaseCache::writebackBlk(CacheBlk *blk)
         DPRINTF(XALA, "marking the request as deterministic\n");
         req->setFlags(Request::DETERMINISTIC);
     }
-    
+
     req->taskId(blk->getTaskId());
 
     PacketPtr pkt =
@@ -2715,28 +2729,28 @@ BaseCache::CacheStats::regStats()
     // for (int i = 0; i < system->maxRequestors(); i++) {
     //     dmHits.subname(i, system->getRequestorName(i));
     // }
-    
+
     // dmMisses
     //     .init(system->maxRequestors())
     //     .flags(total | nozero | nonan);
     // for (int i = 0; i < system->maxRequestors(); i++) {
     //     dmMisses.subname(i, system->getRequestorName(i));
     // }
-    
+
     // dmDemandHits
     //     .flags(total | nozero | nonan);
     // for (int i = 0; i < system->maxRequestors(); i++) {
     //     dmDemandHits.subname(i, system->getRequestorName(i));
     // }
     // dmDemandHits = dmHits;
-    
+
     // dmDemandMisses
     //     .flags(total | nozero | nonan);
     // for (int i = 0; i < system->maxRequestors(); i++) {
     //     dmDemandMisses.subname(i, system->getRequestorName(i));
     // }
     // dmDemandMisses = dmMisses;
-    
+
     // dmDemandAccesses
     //     .flags(total | nozero | nonan);
     // for (int i = 0; i < system->maxRequestors(); i++) {

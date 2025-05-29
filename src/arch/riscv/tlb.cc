@@ -344,23 +344,24 @@ TLB::doTranslate(const RequestPtr &req, ThreadContext *tc,
             return fault;
     }
 
-    if (e->isDetMemory()) 
+    if (e->isDetMemory())
     {
 
         uint64_t oldFlags = req->getFlags();
         req->setFlags(req->getFlags() | Request::DETERMINISTIC);
 
         uint64_t newFlags = req->getFlags();
-        
-        DPRINTF(DetTLB, "TLB setting DETERMINISTIC flag for addr %#x: flags %#x -> %#x, isDeterministic=%d\n", 
+
+        DPRINTF(DetTLB, "TLB setting DETERMINISTIC flag for addr %#x:"
+                "flags %#x -> %#x, isDeterministic=%d\n",
                 vaddr, oldFlags, newFlags, req->isDeterministic());
-        
-        DPRINTF(TLBVerbose, "doTranslate == vaddr=0x%016x paddr=0x%016x mode=%s vpn=0x%05x "
-            "asid=%d size=%x pc=0x%08x rsw=%d\n", 
+
+        DPRINTF(TLBVerbose, "doTranslate == vaddr=0x%016x paddr=0x%016x"
+            "mode=%s vpn=0x%05x ""asid=%d size=%x pc=0x%08x rsw=%d\n",
             vaddr, (e->paddr << PageShift | (vaddr & mask(e->logBytes))),
-            (mode == BaseMMU::Read) ? "READ" : 
+            (mode == BaseMMU::Read) ? "READ" :
             (mode == BaseMMU::Write) ? "WRITE" : "EXECUTE",
-            getVPNFromVAddr(vaddr, satp.mode), 
+            getVPNFromVAddr(vaddr, satp.mode),
             satp.asid, e->size(), req->getPC(), e->pte.rsw);
     }
 

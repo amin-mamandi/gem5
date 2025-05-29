@@ -77,18 +77,18 @@ class PartitionManager : public SimObject
     {
         // return 0;
 
-    
+
       // Default to using CPU ID 0
       int cpu_id = 0;
-      
+
       // If this request has a context ID, use it directly
       if (pkt->req->hasContextId()) {
           cpu_id = pkt->req->contextId();
           // DPRINTF(DetPart, "Using context ID %d as partition ID\n", cpu_id);
       }
-      
+
       return cpu_id;
-      
+
     };
 
     /**

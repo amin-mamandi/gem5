@@ -81,7 +81,7 @@ class MSHRQueue : public Queue<MSHR>
      * demand accesses.
      */
     MSHRQueue(const std::string &_label, int num_entries, int reserve,
-              int demand_reserve, std::string cache_name, System *_system, 
+              int demand_reserve, std::string cache_name, System *_system,
               bool _is_dcache, uint8_t _cpu_id);
 
     /**

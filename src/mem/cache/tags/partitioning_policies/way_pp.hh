@@ -70,7 +70,7 @@ class WayPartitioningPolicy : public BasePartitioningPolicy
     WayPartitioningPolicy(const WayPartitioningPolicyParams &params);
 
     void setCache(BaseTags *cache_ptr) { cache = cache_ptr; }
-    
+
     void
     filterByPartition(std::vector<ReplaceableEntry *> &entries,
                         const uint64_t partition_id) const override;

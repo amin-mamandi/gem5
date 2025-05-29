@@ -79,7 +79,7 @@ PartitionManager::clearDM(uint64_t partition_id, int lowerWay, int upperWay)
     }
 }
 
-void 
+void
 PartitionManager::setDmAssoc(bool dmAssoc)
 {
     for (auto policy : partitioningPolicies) {
@@ -89,7 +89,7 @@ PartitionManager::setDmAssoc(bool dmAssoc)
     }
 }
 
-void 
+void
 PartitionManager::setupNoPartitioning()
 {
     for (auto policy : partitioningPolicies) {
@@ -109,7 +109,7 @@ PartitionManager::setupPartitioning()
     }
 }
 
-void 
+void
 PartitionManager::setCache(BaseTags *cache_ptr)
 {
     for (auto partitioning_policy : partitioningPolicies) {

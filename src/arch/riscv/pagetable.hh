@@ -116,7 +116,7 @@ struct TlbEntry : public Serializable
 
     // Check if this page is deterministic memory
     bool isDetMemory() const
-    {   
+    {
         return (pte.mt) || deterministic;
     }
 

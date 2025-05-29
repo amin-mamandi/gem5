@@ -108,7 +108,7 @@ class Cache : public BaseCache
     /**
      * Handle a request to clear the blocked status of the cache.
      * Called from the CPU side to indicate that resources are available.
-     * 
+     *
      * @return True if the cache was blocked before the call
      */
     bool unblockCache() override;

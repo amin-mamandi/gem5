@@ -685,26 +685,29 @@ TimingSimpleCPU::fetch()
 
     int cpuId = thread->contextId();
 
-    if (system->use_memguard && system->budgetInit[cpuId]) {
-        // DPRINTF(MemGuard, "Checking memory budget for CPU %d\n", cpuId);
-        if(!(system->cycleInit[cpuId])){
-            // DPRINTF(MemGuard, "Initializing memory budget for CPU %d\n", cpuId);
+    if (system->use_memguard &&
+        system->budgetInit[cpuId] &&
+        system->memguardEnabled[cpuId])
+    {
+        if (!(system->cycleInit[cpuId]))
             system->cycleInit[cpuId] = curCycle();
-        }
         if ((curCycle() - system->cycleInit[cpuId]) >= 1000000)
         {
+            DPRINTF(MemGuard,"CORE == cycles elapsed = %d\n", curCycle() - system->cycleInit[cpuId]);
             system->resetMemBudget(cpuId);
             system->cycleInit[cpuId] = curCycle();
-            dcachePort.unblockCache();
-            DPRINTF(MemGuard, "memguard budget has been reset and the cache has been unblocked!\n");
+            if (dcachePort.unblockCache())
+                DPRINTF(MemGuard,"CORE == Unblocked Cache");
         }
     }
 
-    if (system->switched_mshr_count[cpuId]) {
-        // DPRINTF(MemGuard, "Attempting to unblock cache for CPU %d\n", cpuId);
+    // Handle pending cache unblock requests
+    if (system->pendingUnblock[cpuId]) {
         bool unblocked = dcachePort.unblockCache();
-        DPRINTF(MemGuard, "Cache unblock result: %s\n", unblocked ? "success" : "failed");
-        system->switched_mshr_count[cpuId] = false;
+        if (unblocked) {
+            DPRINTF(MemGuard, "CORE == Successfully unblocked cache for CPU %d\n", cpuId);
+        }
+        system->pendingUnblock[cpuId] = false;
     }
 
     DPRINTF(SimpleCPU, "Fetch\n");

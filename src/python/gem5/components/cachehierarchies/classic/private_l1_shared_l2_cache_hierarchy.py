@@ -31,13 +31,12 @@ from m5.objects import (
     BaseXBar,
     Cache,
     L2XBar,
+    PartitionManager,
     Port,
     SystemXBar,
-    PartitionManager,
     WayPartitioningPolicy,
     WayPolicyAllocation,
 )
-
 
 from ....isas import ISA
 from ....utils.override import *
@@ -143,7 +142,7 @@ class PrivateL1SharedL2CacheHierarchy(
         # Define way partitioning allocations
         num_cores = board.get_processor().get_num_cores()
         l2_assoc = self._l2_assoc
-       
+
         # Define way allocations for partitioning
         way_allocations = []
         num_cores = board.get_processor().get_num_cores()
@@ -152,21 +151,19 @@ class PrivateL1SharedL2CacheHierarchy(
         for i in range(num_cores):
             # Calculate ways for this core
             starting_way = i * ways_per_core
-            core_ways = [w for w in range(starting_way, starting_way + ways_per_core)]
-            
+            core_ways = [
+                w for w in range(starting_way, starting_way + ways_per_core)
+            ]
+
             # Create allocation
-            way_allocations.append({
-                "partition_id": i,
-                "ways": core_ways
-            })
+            way_allocations.append({"partition_id": i, "ways": core_ways})
 
         # Create WayPolicyAllocation objects
         allocations = []
         for alloc in way_allocations:
             allocations.append(
                 WayPolicyAllocation(
-                    partition_id=alloc["partition_id"],
-                    ways=alloc["ways"]
+                    partition_id=alloc["partition_id"], ways=alloc["ways"]
                 )
             )
 
@@ -174,14 +171,14 @@ class PrivateL1SharedL2CacheHierarchy(
         policy = WayPartitioningPolicy(allocations=allocations)
 
         # Create partition manager
-        partition_manager = PartitionManager(
-            partitioning_policies=[policy]
+        partition_manager = PartitionManager(partitioning_policies=[policy])
+
+        self.l2cache = L2Cache(
+            size=self._l2_size,
+            assoc=self._l2_assoc,
+            partitioning_manager=partition_manager,
+            is_LLC=True,
         )
-
-
-        self.l2cache = L2Cache(size=self._l2_size, assoc=self._l2_assoc, 
-                               partitioning_manager=partition_manager,
-                               is_LLC= True)
         # ITLB Page walk caches
         self.iptw_caches = [
             MMUCache(size="8KiB", writeback_clean=False)

@@ -210,6 +210,11 @@ class BaseSetAssoc : public BaseTags
             partitionManager->notifyAcquire(partition_id);
         }
 
+        if (blk->isDeterministic() && system->getWayPartMode() == 2) {
+            RequestorID requestor_id = pkt->req->requestorId();
+            stats.determ_blks[requestor_id]++;
+        }
+
         // Update replacement policy
         replacementPolicy->reset(blk->replacementData, pkt);
     }

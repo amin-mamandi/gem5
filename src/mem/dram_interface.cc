@@ -62,35 +62,35 @@ DRAMInterface::chooseNextFRFCFS(MemPacketQueue& queue, Tick min_col_at) const
     // === RESERVED BANK LOGIC  ===
     if (system()->medusaReservedBankMask != 0) {
 
-        DPRINTF(DRAM, "DEBUG: medusaReservedBankMask = %#x (%d)\n", 
+        DPRINTF(DRAM, "DEBUG: medusaReservedBankMask = %#x (%d)\n",
         system()->medusaReservedBankMask, system()->medusaReservedBankMask);
         // Two-level hierarchical scheduler for reserved banks
         static uint64_t bankmaskSaved = system()->medusaReservedBankMask;
         static uint64_t dm_req_srv_count = 0;
         static const uint64_t dm_req_srv_thresh = 30;
         bool be_req_exist = false;
-        
+
         if (!bankmaskSaved) {
             bankmaskSaved = system()->medusaReservedBankMask;
         }
-        
+
         // Check if any best-effort requests exist
         for (auto i = queue.begin(); i != queue.end(); ++i) {
             MemPacket* pkt = *i;
-            if (pkt->pseudoChannel == pseudoChannel && 
+            if (pkt->pseudoChannel == pseudoChannel &&
                 !(system()->medusaReservedBankMask & (0x01 << pkt->bank))) {
                 be_req_exist = true;
                 break;
             }
         }
-        
+
         // Round-robin scheduling for reserved banks
         for (auto i = queue.begin(); i != queue.end(); ++i) {
             MemPacket* pkt = *i;
             if (pkt->pseudoChannel != pseudoChannel) continue;
 
-            if (!burstReady(pkt)) continue; 
-            
+            if (!burstReady(pkt)) continue;
+
             if ((system()->medusaReservedBankMask & (0x01 << pkt->bank)) &&
                 !(be_req_exist && dm_req_srv_count >= dm_req_srv_thresh)) {
 
@@ -105,7 +105,7 @@ DRAMInterface::chooseNextFRFCFS(MemPacketQueue& queue, Tick min_col_at) const
                         bankmaskSaved = system()->medusaReservedBankMask;
                     }
                     dm_req_srv_count++;
-                    
+
                     const Bank& bank = ranks[pkt->rank]->banks[pkt->bank];
                     Tick col_at = pkt->isRead() ? bank.rdAllowedAt : bank.wrAllowedAt;
                     DPRINTF(DetMem, "Reserved bank %d selected (RR), col_at: %llu\n", pkt->bank, col_at);
@@ -113,16 +113,16 @@ DRAMInterface::chooseNextFRFCFS(MemPacketQueue& queue, Tick min_col_at) const
                 }
             }
         }
-        
+
         // If no different reserved bank found, check for same reserved bank
         for (auto i = queue.begin(); i != queue.end(); ++i) {
             MemPacket* pkt = *i;
             if (pkt->pseudoChannel != pseudoChannel) continue;
-            
-            if (!burstReady(pkt)) continue; 
-            
+
+            if (!burstReady(pkt)) continue;
+
             if ((system()->medusaReservedBankMask & (0x01 << pkt->bank)) &&
-                !(be_req_exist && dm_req_srv_count >= dm_req_srv_thresh)) { 
+                !(be_req_exist && dm_req_srv_count >= dm_req_srv_thresh)) {
                 dm_req_srv_count++;
                 const Bank& bank = ranks[pkt->rank]->banks[pkt->bank];
                 Tick col_at = pkt->isRead() ? bank.rdAllowedAt : bank.wrAllowedAt;
@@ -130,13 +130,13 @@ DRAMInterface::chooseNextFRFCFS(MemPacketQueue& queue, Tick min_col_at) const
                 return std::make_pair(i, col_at);
             }
         }
-        
+
         // Reset counter if no reserved bank request served
         dm_req_srv_count = 0;
         DPRINTF(DetMem, "No suitable reserved bank found, resetting dm_req_srv_count\n");
     }
     // === END RESERVED BANK LOGIC ===
-    
+
     // === EXISTING FRFCFS LOGIC (UNCHANGED) ===
     std::vector<uint32_t> earliest_banks(ranksPerChannel, 0);
     bool filled_earliest_banks = false;
@@ -144,7 +144,7 @@ DRAMInterface::chooseNextFRFCFS(MemPacketQueue& queue, Tick min_col_at) const
     bool found_hidden_bank = false;
     bool found_prepped_pkt = false;
     bool found_earliest_pkt = false;
-    
+
     Tick selected_col_at = MaxTick;
     auto selected_pkt_it = queue.end();
 
@@ -168,14 +168,16 @@ DRAMInterface::chooseNextFRFCFS(MemPacketQueue& queue, Tick min_col_at) const
                     }
                 } else if (!found_earliest_pkt) {
                     if (!filled_earliest_banks) {
-                        std::tie(earliest_banks, hidden_bank_prep) = minBankPrep(queue, min_col_at);
+                        std::tie(earliest_banks, hidden_bank_prep) =
+                                minBankPrep(queue, min_col_at);
                         filled_earliest_banks = true;
                     }
-                    
-                    if (bits(earliest_banks[pkt->rank], pkt->bank, pkt->bank)) {
+
+                    if (bits(earliest_banks[pkt->rank], pkt->bank,
+                            pkt->bank)) {
                         found_earliest_pkt = true;
                         found_hidden_bank = hidden_bank_prep;
-                        
+
                         if (hidden_bank_prep || !found_prepped_pkt) {
                             selected_pkt_it = i;
                             selected_col_at = col_allowed_at;
@@ -185,7 +187,7 @@ DRAMInterface::chooseNextFRFCFS(MemPacketQueue& queue, Tick min_col_at) const
             }
         }
     }
-    
+
     return std::make_pair(selected_pkt_it, selected_col_at);
     /*
     std::vector<uint32_t> earliest_banks(ranksPerChannel, 0);
@@ -967,17 +969,8 @@ DRAMInterface::decodePacket(const PacketPtr pkt, Addr pkt_addr,
 {
     // Check if this is a deterministic packet
     bool is_deterministic = false;
-    
-    // Check based on requestor name or packet attributes
-    std::string requestor_name = system()->getRequestorName(pkt->requestorId());
-    if (requestor_name.find("cpu0") != std::string::npos || 
-        requestor_name.find("cores0") != std::string::npos) {
-        is_deterministic = true;
-        // DPRINTF(DetMem, "Opt1: Deterministic packet detected for requestor %s\n", requestor_name.c_str());
-    }
 
     if (pkt->req->isDeterministic()) {
-        DPRINTF(DetMem, "Opt2: Deterministic packet detected for requestor %s\n", requestor_name.c_str());
         is_deterministic = true;
     }
 

@@ -144,21 +144,25 @@ void
 BaseTags::clearDeterministicBits(int lowerWay, int upperWay)
 {
     int cleared = 0;
-    DPRINTF(DetTags, "Clearing deterministic bits for ways %d to %d\n", 
+    DPRINTF(DetTags, "Clearing deterministic bits for ways %d to %d\n",
             lowerWay, upperWay);
-    
+
     // Use anyBlk to iterate through all blocks
     anyBlk([this, lowerWay, upperWay, &cleared](CacheBlk &blk) {
         int way = blk.getWay();
         if (way >= lowerWay && way <= upperWay && blk.isDeterministic()) {
-            DPRINTF(DetTags, "Clearing deterministic bit for block at %#llx in way %d\n", 
-                    regenerateBlkAddr(&blk), way);
+            DPRINTF(DetTags, "Clearing deterministic bit for block at "
+                    " %#llx in way %d\n", regenerateBlkAddr(&blk), way);
             blk.setDeterministic(false);
             cleared++;
         }
         return false; // Continue iteration (return true would stop iteration)
     });
-    
+
+    for (int req_id = 0; req_id < system->maxRequestors(); ++req_id) {
+        stats.determ_blks[req_id] = 0;
+    }
+
     DPRINTF(DetTags, "Cleared deterministic bits for %d blocks\n", cleared);
 }
 
@@ -278,7 +282,9 @@ BaseTags::BaseTagStats::BaseTagStats(BaseTags &_tags)
     ADD_STAT(tagAccesses, statistics::units::Count::get(),
              "Number of tag accesses"),
     ADD_STAT(dataAccesses, statistics::units::Count::get(),
-             "Number of data accesses")
+             "Number of data accesses"),
+    ADD_STAT(determ_blks, statistics::units::Count::get(),
+             "Number of allocated deterministic blocks from last stat reset")
 {
 }
 
@@ -321,6 +327,14 @@ BaseTags::BaseTagStats::regStats()
     ratioOccsTaskId.flags(nozero);
 
     ratioOccsTaskId = occupanciesTaskId / statistics::constant(tags.numBlocks);
+
+    determ_blks
+        .init(system->maxRequestors())
+        .flags(nozero | nonan)
+        ;
+    for (int i = 0; i < system->maxRequestors(); i++) {
+        determ_blks.subname(i, system->getRequestorName(i));
+    }
 }
 
 void

@@ -182,15 +182,20 @@ System::System(const Params &p)
                  RangeSize(p.m5ops_base, 0x10000) :
                  AddrRange(1, 0)), // Create an empty range if disabled
       redirectPaths(p.redirect_paths),
-      mshrCount{-1, -1, -1, -1},
       wayPartMode(1),
-      memoryBudget{0, 0, 0, 0},
+      memoryBudget{-1, -1, -1, -1},
       budgetInit{0, 0, 0, 0},
+      budgetResetTime{0, 0, 0, 0},
+      mshrCount{-1, -1, -1, -1},
+      pendingUnblock{false, false, false, false},
+      budgetResetInterval(15000000),
+      memguardEnabled{false, false, false, false},
       cycleInit{0, 0, 0, 0},
       guard{false, false, false, false},
       use_memguard(0),
       switched_mshr_count{false, false, false, false},
       clearDmFlag(0),
+      clearDmCpuId(0),
       medusaReservedBankMask(0)
 {
     panic_if(!workload, "No workload set for system %s "
@@ -244,17 +249,30 @@ System::setMemoryMode(enums::MemoryMode mode)
 }
 
 
-void
-System::setMshr(uint8_t cpu_id, int mshrcount)
-{
-    DPRINTF(MSHRInst, "In system, value of cpu_id = %d and mshrcount = %d\n", 
-            cpu_id, mshrcount);
-    if (mshrcount == -1 || (mshrCount[cpu_id] != -1 
-                           && mshrcount > mshrCount[cpu_id])){
-        DPRINTF(MSHRInst, "setting switched_mshr_count[%d] = true\n", cpu_id);
-        switched_mshr_count[cpu_id] = true;
+void System::setMshr(uint8_t cpu_id, int mshrcount) {
+
+    // If increasing MSHR limit, signal that cache should be unblocked
+    if (mshrcount > mshrCount[cpu_id] || mshrcount == -1) {
+        DPRINTF(MSHRInst, "Setting pending unblock for CPU %d\n", cpu_id);
+        pendingUnblock[cpu_id] = true;
     }
     mshrCount[cpu_id] = mshrcount;
+}
+
+void
+System::enableMemGuardForCore(uint8_t cpu_id, bool enable)
+{
+    if (cpu_id < 4) {
+        memguardEnabled[cpu_id] = enable;
+        DPRINTF(MSHRInst, "MemGuard %s for CPU %d\n",
+                enable ? "enabled" : "disabled", cpu_id);
+    }
+}
+
+bool
+System::isMemGuardEnabledForCore(uint8_t cpu_id)
+{
+    return (cpu_id < 4) ? memguardEnabled[cpu_id] : false;
 }
 
 int
@@ -266,7 +284,7 @@ System::getmshrCount(uint8_t cpu_id)
 void
 System::setMemBudget(uint8_t cpu_id, uint64_t budget)
 {
-    DPRINTF(MSHRInst, "In system, value of cpu_id = %d and budget = %d\n", 
+    DPRINTF(MSHRInst, "setMemBudget == In system, value of cpu_id = %d and budget = %d\n",
             cpu_id, budget);
     memoryBudget[cpu_id] = budget;
     budgetInit[cpu_id] = budget;
@@ -275,26 +293,34 @@ System::setMemBudget(uint8_t cpu_id, uint64_t budget)
 void
 System::resetMemBudget(uint8_t cpu_id)
 {
-    DPRINTF(MSHRInst, "For cpu_id %d, budget left = %d\n", 
-            cpu_id, memoryBudget[cpu_id]);
+    DPRINTF(MSHRInst, "resetMemBudget: CPU %d - before reset: budget=%d, mshrCount=%d\n",
+            cpu_id, memoryBudget[cpu_id], mshrCount[cpu_id]);
+
+    // Reset the budget to initial value
     memoryBudget[cpu_id] = budgetInit[cpu_id];
+
+    // Reset MSHR count to allow normal operation (-1 means unlimited)
     setMshr(cpu_id, -1);
+
+    DPRINTF(MSHRInst, "resetMemBudget: CPU %d - after reset: budget=%d, mshrCount=%d\n",
+            cpu_id, memoryBudget[cpu_id], mshrCount[cpu_id]);
 }
 
 void
 System::enableMemGuard(int use)
 {
+     if (use > 0) {
+        memguardEnabled[0] = true;  // Enable for CPU 0
+        DPRINTF(MSHRInst, "enableMemGuard: MemGuard enabled for CPU 0\n");
+    } else {
+        for (int i = 0; i < 4; i++) {
+            memguardEnabled[i] = false;
+        }
+        DPRINTF(MSHRInst, "enableMemGuard: MemGuard disabled for all CPUs\n");
+    }
     use_memguard = use;
 }
 
-bool
-System::isGuarded()
-{
-    if (guard[0] || guard[1] || guard[2] || guard[3])
-        return true;
-    else
-        return false;
-}
 
 void
 System::setWayPartMode(int use) {

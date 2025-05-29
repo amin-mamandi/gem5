@@ -303,17 +303,21 @@ class System : public SimObject, public PCEventScope
      */
     void setMemoryMode(enums::MemoryMode mode);
 
-    
-    void setMshr(uint8_t cpu_id, int mshrcount); 
-    int  getmshrCount(uint8_t cpu_id); 
-    void  setMemBudget(uint8_t cpu_id, uint64_t budget); 
-    uint64_t  getMemBudget(uint8_t cpuid); 
-    void  resetMemBudget(uint8_t cpu_id); 
-    void enableMemGuard(int use); 
-    bool isGuarded(); 
-    void setWayPartMode(int use); 
-    int getWayPartMode(); 
-    void clearDM(int cpu_id); 
+
+    void setMshr(uint8_t cpu_id, int mshrcount);
+    int  getmshrCount(uint8_t cpu_id);
+    void  setMemBudget(uint8_t cpu_id, uint64_t budget);
+    uint64_t  getMemBudget(uint8_t cpuid);
+    void  resetMemBudget(uint8_t cpu_id);
+    void enableMemGuard(int use);
+    bool isGuarded(uint8_t cpu_id);
+    void setWayPartMode(int use);
+    int getWayPartMode();
+    void clearDM(int cpu_id);
+    bool shouldUnblockCache(uint8_t cpu_id);
+    void clearUnblockFlag(uint8_t cpu_id);
+    void enableMemGuardForCore(uint8_t cpu_id, bool enable = true);
+    bool isMemGuardEnabledForCore(uint8_t cpu_id);
 
     /** @} */
 
@@ -422,15 +426,6 @@ class System : public SimObject, public PCEventScope
 
     const Addr _cacheLineSize;
 
-    int mshrCount[4];
-
-    /**
-     * 0: partitioning disabled
-     * 1: simple Way-based partitioning
-     * 2: deterministic memory replacement policy
-    */
-     int wayPartMode;
-
     uint64_t workItemsBegin = 0;
     uint64_t workItemsEnd = 0;
     uint32_t numWorkIds;
@@ -453,14 +448,25 @@ class System : public SimObject, public PCEventScope
   public:
 
     /**
-     * Memory budget per CPU (requests allowed from reserved banks).
-     */
-    uint64_t memoryBudget[4];
+     * 0: partitioning disabled
+     * 1: simple Way-based partitioning
+     * 2: deterministic memory replacement policy
+    */
+     int wayPartMode;
 
-    /**
-     * Initial memory budget per CPU (for reset).
-     */
-    uint64_t budgetInit[4];
+
+    // Per-core memory budgets and state
+    int32_t memoryBudget[4];      // Current budget
+    uint64_t budgetInit[4];        // Initial/reset budget value
+    uint64_t budgetResetTime[4];       // When budget was last reset
+    int mshrCount[4];              // Current MSHR limit per core
+    bool pendingUnblock[4];        // Pending unblock requests
+
+    // Configuration
+    uint64_t budgetResetInterval = 15000000;                // Configurable reset interval
+    bool memguardEnabled[4];      // Per-core enable/disable
+
+
 
     /**
      * Initial cycle per CPU (for budget reset).
@@ -572,7 +578,7 @@ class System : public SimObject, public PCEventScope
     {
       // Get the requestor name
       std::string requestorName = getRequestorName(requestor_id);
-      
+
       // Use a simple approach with pairs
       static const std::pair<std::string, int> cpuPatterns[] = {
         {"core0", 0}, {"cores0", 0},
@@ -580,14 +586,14 @@ class System : public SimObject, public PCEventScope
         {"core2", 2}, {"cores2", 2},
         {"core3", 3}, {"cores3", 3}
       };
-      
+
       // Check if the requestor name contains any of the patterns
       for (const auto& pair : cpuPatterns) {
           if (requestorName.find(pair.first) != std::string::npos) {
               return pair.second;
           }
       }
-      
+
       // No match found
       return -1;
     }

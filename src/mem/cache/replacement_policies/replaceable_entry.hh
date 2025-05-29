@@ -72,8 +72,8 @@ class ReplaceableEntry
      */
     uint32_t _way;
 
-    /** 
-     * Whether this block holds deterministic data 
+    /**
+     * Whether this block holds deterministic data
      */
     bool _deterministic;
 
@@ -114,19 +114,19 @@ class ReplaceableEntry
      */
     uint32_t getWay() const { return _way; }
 
-        /** 
+        /**
      * Returns whether this entry holds deterministic data
      * @return True if the entry is deterministic
      */
     virtual bool isDeterministic() const { return _deterministic; }
-    
+
     /**
      * Sets the deterministic status of this entry
      * @param det New deterministic status
      */
     virtual void setDeterministic(bool det) { _deterministic = det; }
-    
-    
+
+
     /**
      * Prints relevant information about this entry.
      *

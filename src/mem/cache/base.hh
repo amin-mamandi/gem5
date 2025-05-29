@@ -589,7 +589,7 @@ class BaseCache : public ClockedObject
      */
     virtual void recvTimingSnoopReq(PacketPtr pkt) = 0;
 
-    /** 
+    /**
      * Unblock the cache port
      */
     virtual bool unblockCache() = 0;
@@ -1178,7 +1178,7 @@ class BaseCache : public ClockedObject
         // statistics::Formula dmDemandHits;
         // statistics::Formula dmDemandMisses;
         // statistics::Formula dmDemandAccesses;
-        
+
         // // Non-DM request counters
         // statistics::Scalar nonDmKernelReq;
         // statistics::Scalar nonDmUserReq;
@@ -1216,20 +1216,28 @@ class BaseCache : public ClockedObject
     {
         bool memguard_throttled = false;
 
-        // if (system->use_memguard && is_dcache) {
-        //     int mshr_limit = system->getmshrCount(cpu_id);
-        //     DPRINTF(DetCache, "MSHR limit for CPU %d is %d\n", cpu_id, mshr_limit);
-        //     if (mshr_limit >= 0 && mshr_limit <= 1) {  // Heavily throttled
-        //         DPRINTF(DetCache, "it is heavily throttled\n");
-        //         memguard_throttled = true;
-        //     }
-        // }
-        
+        // Check if MemGuard is throttling this core
+        if (system->use_memguard && is_dcache &&
+            system->memguardEnabled[cpu_id] &&
+            system->isMemGuardEnabledForCore(cpu_id) &&
+            (system->memoryBudget[cpu_id] == 0)){
+            memguard_throttled = true;
+        }
+
+        if (memguard_throttled) {
+            // Block the cache and don't allocate MSHR
+            // DPRINTF(DetCache, "allocateMissBuffer == Cache blocked due to MemGuard throttling\n");
+            // Block the cache and return nullptr to indicate allocation failed
+            // setBlocked((BlockedCause)MSHRQueue_MSHRs);
+            return nullptr;
+        }
+
         MSHR *mshr = mshrQueue.allocate(pkt->getBlockAddr(blkSize), blkSize,
                                         pkt, time, order++,
-                                        allocOnFill(pkt->cmd));        
+                                        allocOnFill(pkt->cmd));
 
-        if (mshrQueue.isFull() || memguard_throttled) {
+
+        if (mshrQueue.isFull()) {
             setBlocked((BlockedCause)MSHRQueue_MSHRs);
         }
 
@@ -1308,13 +1316,7 @@ class BaseCache : public ClockedObject
     void clearBlocked(BlockedCause cause)
     {
         uint8_t flag = 1 << cause;
-        
-        // DEFENSIVE: Check if actually blocked before clearing
-        // if (!(blocked & flag)) {
-        //     DPRINTF(DetCache, "clearBlocked called for cause %d but not blocked\n", cause);
-        //     return;  // Don't clear if not blocked for this cause
-        // }
-        
+
         blocked &= ~flag;
         DPRINTF(DetCache, "Unblocking for cause %d, mask=%d\n", cause, blocked);
         if (blocked == 0) {

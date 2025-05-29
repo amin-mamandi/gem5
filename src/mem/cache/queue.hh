@@ -159,7 +159,7 @@ class Queue : public Drainable, public Named
      * @param reserve The extra overflow entries needed.
      */
     Queue(const std::string &_label, int num_entries, int reserve,
-            const std::string &name, System *sys, 
+            const std::string &name, System *sys,
             bool dcache_flag, uint8_t core_id) :
         Named(name),
         label(_label), numEntries(num_entries + reserve),
@@ -180,22 +180,18 @@ class Queue : public Drainable, public Named
 
     bool isFull() const
     {
-        return (allocated >= numEntries - numReserve);
-
-    // if (is_dcache && system) {
-            
-    //         int current_mshr_count = system->getmshrCount(cpu_id);
-    //         regulated_mshr_count = (current_mshr_count >= 0) ? 
-    //                             current_mshr_count + numReserve - 1 : 
-    //                                 numEntries;
-    //         if (system->use_memguard){
-    //             DPRINTF(DetMSHR, "MSHR count for core %d: %d, regulated_mshr_count: %d, allocated: %d\n",
-    //                     cpu_id, current_mshr_count, regulated_mshr_count, allocated);
-    //         }
-    //         return (allocated > regulated_mshr_count - numReserve);
-    //     } else {
-    //         return (allocated > numEntries - numReserve);
-    //     }
+        // return (allocated >= numEntries - numReserve);
+        if (is_dcache) {
+            if (system->isMemGuardEnabledForCore(cpu_id)) {
+                regulated_mshr_count = (system->getmshrCount(cpu_id) >= 0) ? system->getmshrCount(cpu_id) + numReserve - 1 : numEntries;
+                return (allocated > regulated_mshr_count - numReserve);
+            } else {
+                return (allocated > numEntries - numReserve);
+            }
+        }
+        else {
+                return (allocated > numEntries - numReserve);
+        }
     }
 
     int numInService() const

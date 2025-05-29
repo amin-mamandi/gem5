@@ -52,7 +52,7 @@ namespace partitioning_policy
 {
 
 WayPartitioningPolicy::WayPartitioningPolicy
-    (const WayPartitioningPolicyParams &params): 
+    (const WayPartitioningPolicyParams &params):
         BasePartitioningPolicy(params),
         cache(nullptr),
         assoc(params.cache_associativity)
@@ -108,14 +108,14 @@ void WayPartitioningPolicy::setupNoPartitioning() {
     if (partitioningEnabled) {  // Only setup if currently partitioned
         // Clear existing allocations
         partitionIdWays.clear();
-        
+
         // Assign all ways to all possible partition IDs
         for (int partition_id = 0; partition_id < 4; partition_id++) {
             for (unsigned way = 0; way < assoc; way++) {
                 addWayToPartition(partition_id, way);
             }
         }
-        
+
         partitioningEnabled = false;
         dmAssoc = false;  // No deterministic filtering for mode 0
         DPRINTF(DetPart, "Mode 0: All partitions assigned all %d ways\n", assoc);
@@ -130,15 +130,15 @@ void WayPartitioningPolicy::setupPartitioning() {
 
         // Default allocation: each of 4 cores gets a fixed number of ways
         int ways_per_partition = assoc / 4;
-        
+
         for (int partition_id = 0; partition_id < 4; ++partition_id) {
-            for (int way = partition_id * ways_per_partition; 
-                        way < (partition_id + 1) * ways_per_partition; 
+            for (int way = partition_id * ways_per_partition;
+                        way < (partition_id + 1) * ways_per_partition;
                         ++way) {
                 addWayToPartition(partition_id, way);
             }
         }
-        
+
         partitioningEnabled = true;
         dmAssoc = false;  //  Initialize to false, will be set per-request in mode 2
         DPRINTF(DetPart, "Mode 1/2: Default partitioning - %d ways per partition\n", ways_per_partition);
@@ -156,16 +156,17 @@ void WayPartitioningPolicy::clearDM(uint64_t partition_id, int lowerWay, int upp
         if (it != partitionIdWays.end()) {
             int minWay = *std::min_element(it->second.begin(), it->second.end());
             int maxWay = *std::max_element(it->second.begin(), it->second.end());
-            
+
             DPRINTF(DetPart, "Partition 0 has ways: ");
             for (unsigned way : it->second) {
                 DPRINTF(DetPart, "%d ", way);
             }
             DPRINTF(DetPart, "\n");
-            
-            DPRINTF(DetPart, "Clearing DM bits for partition 0 in assigned ways [%d - %d]\n",
-                    minWay, maxWay);
-            
+
+            DPRINTF(DetPart, "Clearing DM bits for partition 0 in "
+                             "assigned ways [%d - %d]\n",
+                              minWay, maxWay);
+
             cache->clearDeterministicBits(minWay, maxWay);
         } else {
             DPRINTF(DetPart, "No ways assigned to partition 0 for DM clearing\n");
@@ -225,8 +226,6 @@ WayPartitioningPolicy::filterByPartition(
     if (dmAssoc && !entries.empty()) {
         bool hasNonDeterministic = std::any_of(entries.begin(), entries.end(),
             [](ReplaceableEntry *entry) { return !entry->isDeterministic(); });
-        
-        DPRINTF(DetPart, "dmAssoc is enabled, hasNonDeterministic: %d\n", hasNonDeterministic);
 
         if (hasNonDeterministic) {
             const auto det_entries_to_remove = std::remove_if(
@@ -237,89 +236,6 @@ WayPartitioningPolicy::filterByPartition(
             entries.erase(det_entries_to_remove, entries.end());
         }
     }
-    /*
-    // Skip filtering if partitioning is disabled
-    if (!partitioningEnabled) {
-        DPRINTF(PartitionPolicy, "Partitioning is disabled, allowing all %d entries\n", entries.size());
-        return;
-    }
-
-    DPRINTF(PartitionPolicy, "Before filtering: %d entries for partition %d, dmAssoc=%d\n", 
-           entries.size(), partition_id, dmAssoc);
-    
-    // Print entry ways before filtering
-    if (entries.size() > 0) {
-        std::string ways = "";
-        for (const auto& entry : entries) {
-            ways += csprintf("%d(det=%d) ", entry->getWay(), entry->isDeterministic());
-        }
-        DPRINTF(DetPart, "Entry ways before filtering: %s\n", ways);
-    }
-
-    // If no entries to filter or partition_id not policed, return
-    if (entries.empty() || partitionIdWays.find(partition_id) == partitionIdWays.end()) {
-        DPRINTF(DetPart, "No entries or no ways defined for partition %d\n", partition_id);
-        return;
-    }
-
-    // First, filter by way allocation
-    auto entries_it = std::remove_if(
-        entries.begin(),
-        entries.end(),
-        [this, partition_id](ReplaceableEntry *entry)
-        {
-            bool keep = partitionIdWays.at(partition_id).find(entry->getWay())
-                != partitionIdWays.at(partition_id).end();
-            DPRINTF(PartitionPolicy, "Way %d for partition %d: %s\n", 
-                   entry->getWay(), partition_id, keep ? "keep" : "remove");
-            return !keep;
-        }
-    );
-    entries.erase(entries_it, entries.end());
-
-    // Show results after filtering
-    DPRINTF(PartitionPolicy, "After way filtering: %d entries remain\n", entries.size());
-    
-    // Now, if in deterministic mode (mode 2), prioritize non-deterministic blocks
-    if (dmAssoc && !entries.empty()) {
-        // Check if there are any non-deterministic entries
-        bool hasNonDeterministic = false;
-        for (const auto entry : entries) {
-            if (!entry->isDeterministic()) {
-                hasNonDeterministic = true;
-                break;
-            }
-        }
-
-        DPRINTF(PartitionPolicy, "dmAssoc=true, hasNonDeterministic=%d\n", hasNonDeterministic);
-        
-        // If we have non-deterministic entries, filter out deterministic ones
-        if (hasNonDeterministic) {
-            entries_it = std::remove_if(
-                entries.begin(),
-                entries.end(),
-                [this](ReplaceableEntry *entry)  // Add 'this' to the capture list
-                {
-                    DPRINTF(PartitionPolicy, "Checking entry way=%d, isDet=%d\n", 
-                        entry->getWay(), entry->isDeterministic());
-                    return entry->isDeterministic();
-                }
-            );
-            entries.erase(entries_it, entries.end());
-            
-            DPRINTF(PartitionPolicy, "After deterministic filtering: %d entries remain\n", entries.size());
-        }
-    }
-
-    // Print final selected entries
-    if (entries.size() > 0) {
-        std::string finalWays = "";
-        for (const auto& entry : entries) {
-            finalWays += csprintf("%d(det=%d) ", entry->getWay(), entry->isDeterministic());
-        }
-        DPRINTF(PartitionPolicy, "Final entries after all filtering: %s\n", finalWays);
-    }
-    */
 }
 
 } // namespace partitioning_policy

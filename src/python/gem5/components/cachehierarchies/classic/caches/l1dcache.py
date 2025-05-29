@@ -69,5 +69,5 @@ class L1DCache(Cache):
         self.writeback_clean = writeback_clean
         self.is_dCache = True
         self.is_iCache = False
-        self.cpu_id =  cpu_id
+        self.cpu_id = cpu_id
         self.prefetcher = PrefetcherCls()

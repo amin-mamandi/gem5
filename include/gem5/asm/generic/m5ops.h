@@ -75,8 +75,8 @@
 // #define M5OP_RESERVED5          0x59 // Reserved for user
 
 
-#define M5OP_SETMSHR            0x56 
-#define M5OP_SETMEMBUDGET       0x57 
+#define M5OP_SETMSHR            0x56
+#define M5OP_SETMEMBUDGET       0x57
 #define M5OP_ENABLEMEMGUARD     0x58
 #define M5OP_CLEARDM            0x5d
 #define M5OP_MEDUSA             0x5e

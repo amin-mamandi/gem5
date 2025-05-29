@@ -98,7 +98,7 @@ MemCtrl::MemCtrl(const MemCtrlParams &p) :
 
 bool
 MemCtrl::isRequestToReservedBank(const std::vector<MemPacketQueue>& queues)
-{   
+{
     // Check each queue in the vector
     for (auto& queue : queues) {
         for (auto& pkt : queue) {
@@ -224,13 +224,20 @@ MemCtrl::getCpuid(uint8_t bank)
 // Decrement the budget counter and block the cpu
 // when entire budget is utilized.
 void
-MemCtrl::memGuard(uint8_t cpu_id)
-{
+MemCtrl::memGuard(uint8_t cpu_id) {
+    if (!system()->memguardEnabled[cpu_id]) {
+        return;
+    }
+
     system()->memoryBudget[cpu_id]--;
-    
-    if (!(system()->memoryBudget[cpu_id])) {
-        system()->setMshr(cpu_id, 1);
-        DPRINTF(DetMem, "memGuard == memory budget:%d\n", system()->memoryBudget[cpu_id]);
+
+    DPRINTF(DetMem, "MemGuard: CPU %d budget decremented to %d\n",
+            cpu_id, system()->memoryBudget[cpu_id]);
+
+    // When budget exhausted, set the cache blocked flag
+    if (system()->memoryBudget[cpu_id] == 0) {
+        system()->setMshr(cpu_id, -1);
+        DPRINTF(DetMem, "MemGuard: CPU %d budget exhausted\n", cpu_id);
     }
 }
 
@@ -311,15 +318,15 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
             cpu_id = getCpuid(mem_pkt->bank);
 
 
-            if ((system()->use_memguard > 0) && (system()->memoryBudget[cpu_id])) {
-                DPRINTF(DetMem, "addToReadQueue == memory budget:%d\n", system()->memoryBudget[cpu_id]);
+            if (system()->use_memguard && system()->memguardEnabled[cpu_id] && system()->memoryBudget[cpu_id] > 0) {
+                // DPRINTF(DetMem, "addToReadQueue == CPU %d memory budget: %d\n",
+                //         cpu_id, system()->memoryBudget[cpu_id]);
                 memGuard(cpu_id);
             }
 
-            /*
             // Track specific bank and core access patterns
             if (mem_pkt->bank == 0) {
-                DPRINTF(MemCtrl, "Bank 0 accessed from cpu %s (cpu_id=%d) to address 0x%x\n", 
+                DPRINTF(MemCtrl, "Bank 0 accessed from cpu %s (cpu_id=%d) to address 0x%x\n",
                         system()->getRequestorName(mem_pkt->requestorId()), cpu_id, addr);
                 stats.readBurstsBank0++;
             }
@@ -329,10 +336,10 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
             if (requestorName.find("cores0") != std::string::npos) {
                 DPRINTF(MemCtrl, "CPU0 memory access to address 0x%x\n", addr);
                 stats.readBurstsCore0++;
-                
+
                 // Check if CPU0 is accessing a non-local bank
                 if (mem_pkt->bank != 0) {
-                    DPRINTF(MemCtrl, "CPU0 accessing non-local bank %d at address 0x%x\n", 
+                    DPRINTF(MemCtrl, "CPU0 accessing non-local bank %d at address 0x%x\n",
                             mem_pkt->bank, addr);
                     stats.readBurstsCore0Other++;
                 }
@@ -342,10 +349,10 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
             if (requestorName.find("cores3") != std::string::npos) {
                 DPRINTF(MemCtrl, "CPU3 memory access to address 0x%x\n", addr);
                 stats.readBurstsCore3++;
-                
+
                 // Check if CPU3 is accessing a non-local bank
                 if (mem_pkt->bank != 3) {
-                    DPRINTF(MemCtrl, "CPU3 accessing non-local bank %d at address 0x%x\n", 
+                    DPRINTF(MemCtrl, "CPU3 accessing non-local bank %d at address 0x%x\n",
                             mem_pkt->bank, addr);
                     stats.readBurstsCore3Other++;
                 }
@@ -353,11 +360,11 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
 
             // Track accesses to bank 3
             if (mem_pkt->bank == 3) {
-                DPRINTF(MemCtrl, "Bank3 access from %s to address 0x%x\n", 
+                DPRINTF(MemCtrl, "Bank3 access from %s to address 0x%x\n",
                         system()->getRequestorName(mem_pkt->requestorId()), addr);
                 stats.readBurstsBank3++;
             }
-            */
+
 
             // Increment read entries of the rank (dram)
             // Increment count to trigger issue of non-deterministic read (nvm)
@@ -461,8 +468,8 @@ MemCtrl::addToWriteQueue(PacketPtr pkt, unsigned int pkt_count,
 
             mem_intr->writeQueueSize++;
 
-            if ((system()->use_memguard > 0) && (system()->memoryBudget[cpu_id])) {
-                DPRINTF(DetMem, "addToWriteQueue == memory budget:%d\n", system()->memoryBudget[cpu_id]);
+            if (system()->use_memguard && system()->memguardEnabled[cpu_id] && system()->memoryBudget[cpu_id] > 0) {
+                // DPRINTF(DetMem, "addToWriteQueue == memory budget:%d\n", system()->memoryBudget[cpu_id]);
                 memGuard(cpu_id);
             }
 
@@ -922,7 +929,7 @@ MemCtrl::doBurstAccess(MemPacket* mem_pkt, MemInterface* mem_intr)
     std::tie(cmd_at, mem_intr->nextBurstAt) =
             mem_intr->doBurstAccess(mem_pkt, mem_intr->nextBurstAt, queue);
 
-    /*
+
     if (mem_pkt->isRead()) {
         // Update bank-specific and core-specific stats for deterministic memory
         if (mem_pkt->bank == 0) {
@@ -937,7 +944,7 @@ MemCtrl::doBurstAccess(MemPacket* mem_pkt, MemInterface* mem_intr)
         if (masterName.find("cores0") != std::string::npos) {
             stats.readBurstsCore0++;
             stats.totMemAccLatCore0 += mem_pkt->readyTime - mem_pkt->entryTime;
-            
+
             if (mem_pkt->bank != 0) {
                 stats.readBurstsCore0Other++;
                 stats.totMemAccLatCore0Other += mem_pkt->readyTime - mem_pkt->entryTime;
@@ -954,14 +961,14 @@ MemCtrl::doBurstAccess(MemPacket* mem_pkt, MemInterface* mem_intr)
         if (masterName.find("cores3") != std::string::npos) {
             stats.readBurstsCore3++;
             stats.totMemAccLatCore3 += mem_pkt->readyTime - mem_pkt->entryTime;
-            
+
             if (mem_pkt->bank != 3) {
                 stats.readBurstsCore3Other++;
                 stats.totMemAccLatCore3Other += mem_pkt->readyTime - mem_pkt->entryTime;
             }
         }
-    }     
-    */
+    }
+
 
     DPRINTF(MemCtrl, "Access to %#x, ready at %lld next burst at %lld.\n",
             mem_pkt->addr, mem_pkt->readyTime, mem_intr->nextBurstAt);
@@ -1293,7 +1300,7 @@ MemCtrl::processNextReqEvent(MemInterface* mem_intr,
                 (below_threshold && drainState() != DrainState::Draining) ||
                 (mem_intr->readQueueSize && mem_intr->writesThisTime >= minWritesPerSwitch) ||
                 (mem_intr->readQueueSize && (nvmWriteBlock(mem_intr))) ||
-                isRequestToReservedBank(readQueue)) {  // NEW: Priority for reserved banks
+                isRequestToReservedBank(readQueue)) {  // Priority for reserved banks
 
                 DPRINTF(DetMem, "Switching to reads due to write queue empty or reserved bank request\n");
                 // turn the bus back around for reads again
@@ -1305,7 +1312,7 @@ MemCtrl::processNextReqEvent(MemInterface* mem_intr,
                 (below_threshold && drainState() != DrainState::Draining) ||
                 (mem_intr->readQueueSize && mem_intr->writesThisTime >= minWritesPerSwitch) ||
                 (mem_intr->readQueueSize && (nvmWriteBlock(mem_intr)))) {
-                
+
                 // turn the bus back around for reads again
                 mem_intr->busStateNext = MemCtrl::READ;
             }
@@ -1445,53 +1452,53 @@ MemCtrl::CtrlStats::CtrlStats(MemCtrl &_ctrl)
              "Per-requestor read average memory access latency"),
     ADD_STAT(requestorWriteAvgLat, statistics::units::Rate<
                 statistics::units::Tick, statistics::units::Count>::get(),
-             "Per-requestor write average memory access latency")
-    // ADD_STAT(readBurstsBank0, statistics::units::Count::get(),
-    //          "Number of read bursts to bank 0"),
-    // ADD_STAT(readBurstsCore0, statistics::units::Count::get(),
-    //          "Number of read bursts from core 0"),
-    // ADD_STAT(readBurstsCore0Other, statistics::units::Count::get(),
-    //          "Number of read bursts from core 0 to non-local banks"),
-    // ADD_STAT(readBurstsBank3, statistics::units::Count::get(),
-    //          "Number of read bursts to bank 3"),
-    // ADD_STAT(readBurstsCore3, statistics::units::Count::get(),
-    //          "Number of read bursts from core 3"),
-    // ADD_STAT(readBurstsCore3Other, statistics::units::Count::get(),
-    //          "Number of read bursts from core 3 to non-local banks"),
-    
-    // // Using Average for avgRdQLenBank0 and avgRespQLenBank0
-    // ADD_STAT(avgRdQLenBank0, statistics::units::Count::get(),
-    //          "Average read queue length when enqueuing bank0 request"),
-    // ADD_STAT(avgRespQLenBank0, statistics::units::Count::get(),
-    //          "Average response queue length when enqueuing bank0 request"),
-    
-    // // Tick stats for latency measurements
-    // ADD_STAT(totMemAccLatBank0, statistics::units::Tick::get(),
-    //          "Total memory access latency for bank 0"),
-    // ADD_STAT(totMemAccLatCore0, statistics::units::Tick::get(),
-    //          "Total memory access latency for core 0"),
-    // ADD_STAT(totMemAccLatCore0Other, statistics::units::Tick::get(),
-    //          "Total memory access latency for core 0 to non-local banks"),
-    // ADD_STAT(totMemAccLatBank3, statistics::units::Tick::get(),
-    //          "Total memory access latency for bank 3"),
-    // ADD_STAT(totMemAccLatCore3, statistics::units::Tick::get(),
-    //          "Total memory access latency for core 3"),
-    // ADD_STAT(totMemAccLatCore3Other, statistics::units::Tick::get(),
-    //          "Total memory access latency for core 3 to non-local banks"),
-    
-    // // Formula stats for average latency (will be defined in regStats)
-    // ADD_STAT(avgMemAccLatBank0, statistics::units::Tick::get(),
-    //          "Average memory access latency per DRAM burst for bank 0"),
-    // ADD_STAT(avgMemAccLatCore0, statistics::units::Tick::get(),
-    //          "Average memory access latency per DRAM burst for core 0"),
-    // ADD_STAT(avgMemAccLatCore0Other, statistics::units::Tick::get(),
-    //          "Average memory access latency per DRAM burst for core 0 to non-local banks"),
-    // ADD_STAT(avgMemAccLatBank3, statistics::units::Tick::get(),
-    //          "Average memory access latency per DRAM burst for bank 3"),
-    // ADD_STAT(avgMemAccLatCore3, statistics::units::Tick::get(),
-    //          "Average memory access latency per DRAM burst for core 3"),
-    // ADD_STAT(avgMemAccLatCore3Other, statistics::units::Tick::get(),
-    //          "Average memory access latency per DRAM burst for core 3 to non-local banks")
+             "Per-requestor write average memory access latency"),
+    ADD_STAT(readBurstsBank0, statistics::units::Count::get(),
+             "Number of read bursts to bank 0"),
+    ADD_STAT(readBurstsCore0, statistics::units::Count::get(),
+             "Number of read bursts from core 0"),
+    ADD_STAT(readBurstsCore0Other, statistics::units::Count::get(),
+             "Number of read bursts from core 0 to non-local banks"),
+    ADD_STAT(readBurstsBank3, statistics::units::Count::get(),
+             "Number of read bursts to bank 3"),
+    ADD_STAT(readBurstsCore3, statistics::units::Count::get(),
+             "Number of read bursts from core 3"),
+    ADD_STAT(readBurstsCore3Other, statistics::units::Count::get(),
+             "Number of read bursts from core 3 to non-local banks"),
+
+    // Using Average for avgRdQLenBank0 and avgRespQLenBank0
+    ADD_STAT(avgRdQLenBank0, statistics::units::Count::get(),
+             "Average read queue length when enqueuing bank0 request"),
+    ADD_STAT(avgRespQLenBank0, statistics::units::Count::get(),
+             "Average response queue length when enqueuing bank0 request"),
+
+    // Tick stats for latency measurements
+    ADD_STAT(totMemAccLatBank0, statistics::units::Tick::get(),
+             "Total memory access latency for bank 0"),
+    ADD_STAT(totMemAccLatCore0, statistics::units::Tick::get(),
+             "Total memory access latency for core 0"),
+    ADD_STAT(totMemAccLatCore0Other, statistics::units::Tick::get(),
+             "Total memory access latency for core 0 to non-local banks"),
+    ADD_STAT(totMemAccLatBank3, statistics::units::Tick::get(),
+             "Total memory access latency for bank 3"),
+    ADD_STAT(totMemAccLatCore3, statistics::units::Tick::get(),
+             "Total memory access latency for core 3"),
+    ADD_STAT(totMemAccLatCore3Other, statistics::units::Tick::get(),
+             "Total memory access latency for core 3 to non-local banks"),
+
+    // Formula stats for average latency (will be defined in regStats)
+    ADD_STAT(avgMemAccLatBank0, statistics::units::Tick::get(),
+             "Average memory access latency per DRAM burst for bank 0"),
+    ADD_STAT(avgMemAccLatCore0, statistics::units::Tick::get(),
+             "Average memory access latency per DRAM burst for core 0"),
+    ADD_STAT(avgMemAccLatCore0Other, statistics::units::Tick::get(),
+             "Average memory access latency per DRAM burst for core 0 to non-local banks"),
+    ADD_STAT(avgMemAccLatBank3, statistics::units::Tick::get(),
+             "Average memory access latency per DRAM burst for bank 3"),
+    ADD_STAT(avgMemAccLatCore3, statistics::units::Tick::get(),
+             "Average memory access latency per DRAM burst for core 3"),
+    ADD_STAT(avgMemAccLatCore3Other, statistics::units::Tick::get(),
+             "Average memory access latency per DRAM burst for core 3 to non-local banks")
 {
 }
 
@@ -1564,15 +1571,15 @@ MemCtrl::CtrlStats::regStats()
     requestorWriteAvgLat
         .flags(nonan)
         .precision(2);
-    
-    // avgRdQLenBank0.precision(2);
-    // avgRespQLenBank0.precision(2);
-    // avgMemAccLatBank0.precision(2);
-    // avgMemAccLatCore0.precision(2);
-    // avgMemAccLatCore0Other.precision(2);
-    // avgMemAccLatBank3.precision(2);
-    // avgMemAccLatCore3.precision(2);
-    // avgMemAccLatCore3Other.precision(2);
+
+    avgRdQLenBank0.precision(2);
+    avgRespQLenBank0.precision(2);
+    avgMemAccLatBank0.precision(2);
+    avgMemAccLatCore0.precision(2);
+    avgMemAccLatCore0Other.precision(2);
+    avgMemAccLatBank3.precision(2);
+    avgMemAccLatCore3.precision(2);
+    avgMemAccLatCore3Other.precision(2);
 
     for (int i = 0; i < max_requestors; i++) {
         const std::string requestor = ctrl.system()->getRequestorName(i);
@@ -1599,12 +1606,12 @@ MemCtrl::CtrlStats::regStats()
     requestorReadAvgLat = requestorReadTotalLat / requestorReadAccesses;
     requestorWriteAvgLat = requestorWriteTotalLat / requestorWriteAccesses;
 
-    // avgMemAccLatBank0 = totMemAccLatBank0 / readBurstsBank0;
-    // avgMemAccLatCore0 = totMemAccLatCore0 / readBurstsCore0;
-    // avgMemAccLatCore0Other = totMemAccLatCore0Other / readBurstsCore0Other;
-    // avgMemAccLatBank3 = totMemAccLatBank3 / readBurstsBank3;
-    // avgMemAccLatCore3 = totMemAccLatCore3 / readBurstsCore3;
-    // avgMemAccLatCore3Other = totMemAccLatCore3Other / readBurstsCore3Other;
+    avgMemAccLatBank0 = totMemAccLatBank0 / readBurstsBank0;
+    avgMemAccLatCore0 = totMemAccLatCore0 / readBurstsCore0;
+    avgMemAccLatCore0Other = totMemAccLatCore0Other / readBurstsCore0Other;
+    avgMemAccLatBank3 = totMemAccLatBank3 / readBurstsBank3;
+    avgMemAccLatCore3 = totMemAccLatCore3 / readBurstsCore3;
+    avgMemAccLatCore3Other = totMemAccLatCore3Other / readBurstsCore3Other;
 }
 
 void

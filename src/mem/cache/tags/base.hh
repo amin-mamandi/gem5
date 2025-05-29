@@ -160,10 +160,9 @@ class BaseTags : public ClockedObject
         /** Number of data blocks consulted over all accesses. */
         statistics::Scalar dataAccesses;
 
-        // statistics::Vector determ_replacements;
-        // statistics::Vector determ_blks;
-        // statistics::Vector avg_determ_blks;
-        
+        /** Number of deterministic blocks. */
+        statistics::Vector determ_blks;
+
     } stats;
 
   public:
@@ -259,7 +258,7 @@ class BaseTags : public ClockedObject
      {
          panic("This tag class does not implement deterministic way allocation limit!\n");
      }
-     
+
      virtual void clearDM(int lowerWay, int upperWay)
      {
          panic("This tag class does not implement deterministic bit clearing!\n");
@@ -288,7 +287,9 @@ class BaseTags : public ClockedObject
         stats.occupancies[blk->getSrcRequestorId()]--;
         stats.totalRefs += blk->getRefCount();
         stats.sampledRefs++;
-
+        if (blk->isDeterministic()) {
+            stats.determ_blks[blk->getSrcRequestorId()]--;
+        }
         blk->invalidate();
     }
 

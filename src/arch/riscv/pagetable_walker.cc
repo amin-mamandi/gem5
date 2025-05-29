@@ -585,13 +585,14 @@ Walker::WalkerState::recvPacket(PacketPtr pkt)
             req->setPaddr(paddr);
 
             // Check if this is a deterministic memory page from the TLB
-            TlbEntry *entry = walker->tlb->lookup(getVPNFromVAddr(vaddr, satp.mode), 
-            satp.asid, mode, true);
+            TlbEntry *entry = walker->tlb->lookup(getVPNFromVAddr(vaddr,
+                satp.mode), satp.asid, mode, true);
             if (entry && entry->deterministic) {
                 // Set deterministic flag in the final translated request
                 req->setFlags(req->getFlags() | Request::DETERMINISTIC);
-                DPRINTF(DetPTW, "**Translation complete: Setting DETERMINISTIC flag on request to addr %#x\n", 
-                vaddr);
+                DPRINTF(DetPTW, "**Translation complete: Setting "
+                                "DETERMINISTIC "
+                                "flag on request to addr %#x\n", vaddr);
             }
 
             // do pmp check if any checking condition is met.

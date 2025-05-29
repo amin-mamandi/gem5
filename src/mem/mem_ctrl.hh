@@ -323,7 +323,7 @@ class MemCtrl : public qos::MemCtrl
      */
     bool readQueueFull(unsigned int pkt_count) const;
 
-    
+
     bool isRequestToReservedBank(const std::vector<MemPacketQueue>& queues);
 
     /**
@@ -638,27 +638,27 @@ class MemCtrl : public qos::MemCtrl
         statistics::Formula requestorWriteAvgLat;
 
         // Bank and core specific stats for detailed memory access analysis
-        // statistics::Scalar readBurstsBank0;
-        // statistics::Scalar readBurstsCore0;
-        // statistics::Scalar readBurstsCore0Other;
-        // statistics::Scalar readBurstsBank3;
-        // statistics::Scalar readBurstsCore3;
-        // statistics::Scalar readBurstsCore3Other;
-        // statistics::Average avgRdQLenBank0;
-        // statistics::Average avgRespQLenBank0;
-        // statistics::Scalar totMemAccLatBank0;
-        // statistics::Scalar totMemAccLatCore0;
-        // statistics::Scalar totMemAccLatCore0Other;
-        // statistics::Scalar totMemAccLatBank3;
-        // statistics::Scalar totMemAccLatCore3;
-        // statistics::Scalar totMemAccLatCore3Other;
-        // // Formulas for bank/core specific latency
-        // statistics::Formula avgMemAccLatBank0;
-        // statistics::Formula avgMemAccLatCore0;
-        // statistics::Formula avgMemAccLatCore0Other;
-        // statistics::Formula avgMemAccLatBank3;
-        // statistics::Formula avgMemAccLatCore3;
-        // statistics::Formula avgMemAccLatCore3Other;
+        statistics::Scalar readBurstsBank0;
+        statistics::Scalar readBurstsCore0;
+        statistics::Scalar readBurstsCore0Other;
+        statistics::Scalar readBurstsBank3;
+        statistics::Scalar readBurstsCore3;
+        statistics::Scalar readBurstsCore3Other;
+        statistics::Average avgRdQLenBank0;
+        statistics::Average avgRespQLenBank0;
+        statistics::Scalar totMemAccLatBank0;
+        statistics::Scalar totMemAccLatCore0;
+        statistics::Scalar totMemAccLatCore0Other;
+        statistics::Scalar totMemAccLatBank3;
+        statistics::Scalar totMemAccLatCore3;
+        statistics::Scalar totMemAccLatCore3Other;
+        // Formulas for bank/core specific latency
+        statistics::Formula avgMemAccLatBank0;
+        statistics::Formula avgMemAccLatCore0;
+        statistics::Formula avgMemAccLatCore0Other;
+        statistics::Formula avgMemAccLatBank3;
+        statistics::Formula avgMemAccLatCore3;
+        statistics::Formula avgMemAccLatCore3Other;
     };
 
     CtrlStats stats;

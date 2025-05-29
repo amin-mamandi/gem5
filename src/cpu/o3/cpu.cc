@@ -52,6 +52,7 @@
 #include "cpu/thread_context.hh"
 #include "debug/Activity.hh"
 #include "debug/Drain.hh"
+#include "debug/MemGuard.hh"
 #include "debug/O3CPU.hh"
 #include "debug/Quiesce.hh"
 #include "enums/MemoryMode.hh"
@@ -369,6 +370,30 @@ CPU::tick()
     ++baseStats.numCycles;
     updateCycleCounters(BaseCPU::CPU_STATE_ON);
 
+    if (system->use_memguard &&
+        system->budgetInit[cpuId()] &&
+        system->memguardEnabled[cpuId()])
+    {
+        if (!(system->cycleInit[cpuId()]))
+            system->cycleInit[cpuId()] = curCycle();
+        if ((curCycle() - system->cycleInit[cpuId()]) >= 1000000)
+        {
+            DPRINTF(MemGuard,"CORE == cycles elapsed = %d\n", curCycle() - system->cycleInit[cpuId()]);
+            system->resetMemBudget(cpuId());
+            system->cycleInit[cpuId()] = curCycle();
+            if (iew.ldstQueue.getDataPort().unblockCache())
+                DPRINTF(MemGuard,"CORE == Unblocked Cache\n");
+        }
+    }
+
+    // Handle pending cache unblock requests
+    if (system->pendingUnblock[cpuId()]) {
+        bool unblocked =  iew.ldstQueue.getDataPort().unblockCache();
+        if (unblocked) {
+            DPRINTF(MemGuard, "CORE == Successfully unblocked cache for CPU %d\n", cpuId());
+        }
+        system->pendingUnblock[cpuId()] = false;
+    }
 //    activity = false;
 
     //Tick each of the stages

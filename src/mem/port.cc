@@ -169,8 +169,8 @@ RequestPort::unbind()
 }
 
 bool
-RequestPort::unblockCache() 
-{ 
+RequestPort::unblockCache()
+{
     try {
         if (_responsePort) {
             return _responsePort->handleUnblockRequest();

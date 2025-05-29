@@ -24,14 +24,18 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from typing import Type, List, Optional
+from typing import (
+    List,
+    Optional,
+    Type,
+)
 
 from m5.objects import (
     BasePrefetcher,
     Cache,
     Clusivity,
-    StridePrefetcher,
     PartitionManager,
+    StridePrefetcher,
     WayPartitioningPolicy,
     WayPolicyAllocation,
 )
@@ -57,7 +61,7 @@ class L2Cache(Cache):
         clusivity: Clusivity = "mostly_incl",
         PrefetcherCls: Type[BasePrefetcher] = StridePrefetcher,
         is_LLC: bool = True,
-        partitioning_manager = None,  # Add this parameter
+        partitioning_manager=None,  # Add this parameter
     ):
         super().__init__()
         self.size = size

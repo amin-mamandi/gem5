@@ -243,7 +243,7 @@ class RequestPort: public Port, public AtomicRequestProtocol,
 
     /**
      * Attempt to unblock the connected cache.
-     * This provides a way for the requestor to signal that 
+     * This provides a way for the requestor to signal that
      * any blocking conditions should be cleared.
      *
      * @return true if unblock was successful, false otherwise
@@ -366,9 +366,9 @@ class ResponsePort : public Port, public AtomicResponseProtocol,
      * Handle unblock requests from connected request port.
      * Default implementation does nothing.
      */
-    virtual bool handleUnblockRequest() { 
+    virtual bool handleUnblockRequest() {
         panic("ResponsePort::handleUnblockRequest: unblock not supported\n");
-        return false; 
+        return false;
     }
 
   private:
