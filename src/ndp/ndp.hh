@@ -29,8 +29,9 @@ namespace gem5
                         AddrRangeList getAddrRanges() const override;
 
                 protected:
-                        Tick recvAtomic(PacketPtr pkt) override
-                        { panic("recvAtomic unimpl."); }
+                        Tick recvAtomic(PacketPtr pkt) override;
+
+                        Tick recvAtomic(PacketPtr pkt) override;
 
                         void recvFunctional(PacketPtr pkt) override;
 

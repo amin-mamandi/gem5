@@ -36,6 +36,34 @@ namespace gem5
                 return owner->getAddrRanges();
         }
 
+
+        Tick
+        NDP::CPUSidePort::recvAtomic(PacketPtr pkt)
+        {
+                // For NDP control registers, handle locally
+                if (owner->ndpCtrl.contains(pkt->getAddr()))
+                {
+                        uint64_t ridx = (pkt->getAddr() - owner->ndpCtrl.start()) / sizeof(uint64_t);
+
+                        if (pkt->isRead())
+                        {
+                                uint64_t data = owner->readPI(ridx);
+                                pkt->setRaw<uint64_t>(data);
+                        }
+                        else if (pkt->isWrite())
+                        {
+                                uint64_t data = pkt->getRaw<uint64_t>();
+                                owner->writePI(ridx, data);
+                        }
+
+                        pkt->makeResponse();
+                        return owner->clockPeriod(); // 1 cycle latency
+                }
+
+                // For all other addresses, forward to memory
+                return owner->memPort.sendAtomic(pkt);
+        }
+
         void
         NDP::CPUSidePort::recvFunctional(PacketPtr pkt)
         {
