@@ -87,6 +87,25 @@ class BaseTrafficGen : public ClockedObject
      */
     const Tick progressCheck;
 
+    // Address filtering parameters
+    const unsigned long dramBitmask;
+    const unsigned long channelBitmask;
+    const unsigned long pseudoChannelBitmask;
+
+    // Target lists for filtering
+    const std::vector<unsigned int> targetBanks;
+    const std::vector<unsigned int> targetChannels;
+    const std::vector<unsigned int> targetPseudoChannels;
+
+    const uint64_t minPeriod;
+    const uint64_t maxPeriod;
+    const uint16_t readRatio;
+
+    // Helper function for address filtering (your paddr_to_color logic)
+    unsigned int extractAddressBits(unsigned long mask, Addr addr) const;
+    bool shouldFilterAddress(Addr addr) const;
+    std::shared_ptr<BaseGen> storedGenerator;
+
   private:
     /**
      * Receive a retry from the neighbouring port and attempt to
@@ -116,6 +135,12 @@ class BaseTrafficGen : public ClockedObject
      * Event to keep track of our progress, or lack thereof.
      */
     EventFunctionWrapper noProgressEvent;
+
+    EventFunctionWrapper checkSystemFlagEvent;
+    bool trafficStarted;
+    void checkSystemFlag();
+    void startup() override;
+    void createSimpleGenerator();
 
     /** Time of next transition */
     Tick nextTransitionTick;

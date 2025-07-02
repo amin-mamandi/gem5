@@ -188,11 +188,13 @@ class Queue : public Drainable, public Named
         if (is_dcache && system->isMemGuardEnabled()) {
             if (system->isMemGuardEnabledForCore(cpu_id) &&
                 system->coreMemBudget[cpu_id] == 0) {
-                DPRINTF(MemGuardQueue, "MSHR: core %d, b
-                        locking MSHR allocation. Allocated: %d,
-                        Available: %d\n",
-                        cpu_id, allocated,
-                        numEntries - numReserve - allocated);
+                DPRINTF(MemGuardQueue,
+                    "MSHR: core %d, blocking MSHR allocation.\n",
+                    cpu_id);
+                DPRINTF(MemGuardQueue,
+                    "Allocated: %d\n", allocated);
+                DPRINTF(MemGuardQueue,
+                    "Available: %d\n", numEntries - numReserve - allocated);
                 return true;
             }
 

@@ -218,7 +218,7 @@ class HBM_2000_4H_1x64(DRAMInterface):
     # with 16 pseudo channels, 256MiB per pseudo channel
     device_size = "256MiB"
 
-    device_rowbuffer_size = "2KiB"
+    device_rowbuffer_size = "1KiB"
 
     # 1x128 configuration
     devices_per_rank = 1

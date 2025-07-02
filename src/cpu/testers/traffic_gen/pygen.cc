@@ -62,6 +62,11 @@ PyTrafficGen::start(pybind11::object meta_generator)
 std::shared_ptr<BaseGen>
 PyTrafficGen::nextGenerator()
 {
+    // If we have a stored generator, use it
+    if (storedGenerator) {
+        return storedGenerator;
+    }
+
     if (!metaGenerator)
         return std::shared_ptr<BaseGen>();
 

@@ -196,8 +196,8 @@ BaseCache::CacheResponsePort::handleUnblockRequest()
         return true;
     }
     else{
-        DPRINTF(CachePort, "Port %s is not blocked,
-                ignoring unblock request\n", name());
+        DPRINTF(CachePort, "Port %s is not blocked,"
+                "ignoring unblock request\n", name());
         // We are not blocked, so we do not have to do anything.
         // This is the case for coherent caches, which do not block
         // on MSHR or write buffer availability.

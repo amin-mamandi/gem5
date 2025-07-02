@@ -376,8 +376,8 @@ CPU::tick()
 
         if ((curCycle() - system->getCycleInitCore(cpuId())) >= 1000000)
         {
-            DPRINTF(MemGuardCore,"CORE ==> Cycles elapsed: %llu,
-                resetting budget\n",
+            DPRINTF(MemGuardCore,"CORE ==> Cycles elapsed: %llu,"
+                "resetting budget\n",
                 curCycle() - system->getCycleInitCore(cpuId()));
 
             if (iew.ldstQueue.getDataPort().unblockCache())

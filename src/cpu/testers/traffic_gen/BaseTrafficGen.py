@@ -101,6 +101,36 @@ class BaseTrafficGen(ClockedObject):
     socket_id = Param.Unsigned(0, "Physical Socket identifier")
     numThreads = Param.Unsigned(1, "number of HW thread contexts")
 
+    # Address filtering parameters (same as your C code)
+    dram_bitmask = Param.Unsigned(
+        0x1E000, "DRAM bank bitmask (default: bits 15-18)"
+    )
+    channel_bitmask = Param.Unsigned(
+        0x380, "Channel bitmask (default: bits 7-9)"
+    )
+    pseudo_channel_bitmask = Param.Unsigned(
+        0x40, "Pseudo-channel bitmask (default: bit 6)"
+    )
+
+    target_banks = VectorParam.Unsigned(
+        [], "Target DRAM banks to filter (empty = no bank filtering)"
+    )
+    target_channels = VectorParam.Unsigned(
+        [], "Target channels to filter (empty = no channel filtering)"
+    )
+    target_pseudo_channels = VectorParam.Unsigned(
+        [],
+        "Target pseudo-channels to filter",
+    )
+
+    min_period = Param.Unsigned(
+        100, "Minimum period between requests in nanoseconds"
+    )
+    max_period = Param.Unsigned(
+        1000, "Maximum period between requests in nanoseconds"
+    )
+    rd_ratio = Param.Unsigned(50, "Percentage of requests that are reads")
+
     @classmethod
     def memory_mode(cls):
         return "timing"
