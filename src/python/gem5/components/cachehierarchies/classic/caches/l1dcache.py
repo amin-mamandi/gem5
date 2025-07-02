@@ -29,6 +29,7 @@ from typing import Type
 from m5.objects import (
     BasePrefetcher,
     Cache,
+    IndirectMemoryPrefetcher,
     StridePrefetcher,
 )
 
@@ -53,6 +54,8 @@ class L1DCache(Cache):
         mshrs: int = 16,
         tgts_per_mshr: int = 20,
         writeback_clean: bool = False,
+        is_dCache: bool = True,
+        cpu_id: int = 0,
         PrefetcherCls: Type[BasePrefetcher] = StridePrefetcher,
     ):
         super().__init__()
@@ -64,4 +67,6 @@ class L1DCache(Cache):
         self.mshrs = mshrs
         self.tgts_per_mshr = tgts_per_mshr
         self.writeback_clean = writeback_clean
+        self.is_dCache = True
+        self.cpu_id = cpu_id
         self.prefetcher = PrefetcherCls()

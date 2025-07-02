@@ -66,7 +66,8 @@ void m5_load_symbol();
 void m5_panic(void);
 void m5_work_begin(uint64_t workid, uint64_t threadid);
 void m5_work_end(uint64_t workid, uint64_t threadid);
-
+void m5_setmembudget(uint8_t cpu_id, uint64_t mshrcount);
+void m5_enablememguard(int use);
 /*
  * Send a very generic poke to the workload so it can do something. It's up to
  * the workload to know what information to look for to interpret an event,

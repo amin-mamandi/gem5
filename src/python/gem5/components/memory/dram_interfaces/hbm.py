@@ -208,6 +208,9 @@ class HBM_2000_4H_1x64(DRAMInterface):
     # 64-bit interface for a single pseudo channel
     device_bus_width = 64
 
+    write_buffer_size = 128
+    read_buffer_size = 128
+
     # HBM2 supports BL4
     burst_length = 4
 
@@ -215,7 +218,7 @@ class HBM_2000_4H_1x64(DRAMInterface):
     # with 16 pseudo channels, 256MiB per pseudo channel
     device_size = "256MiB"
 
-    device_rowbuffer_size = "1KiB"
+    device_rowbuffer_size = "2KiB"
 
     # 1x128 configuration
     devices_per_rank = 1
