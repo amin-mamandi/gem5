@@ -218,7 +218,12 @@ class HBM_2000_4H_1x64(DRAMInterface):
     # with 16 pseudo channels, 256MiB per pseudo channel
     device_size = "256MiB"
 
+<<<<<<< HEAD
     device_rowbuffer_size = "1KiB"
+=======
+    # device_rowbuffer_size = "2KiB"
+    device_rowbuffer_size = "2kB"
+>>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
 
     # 1x128 configuration
     devices_per_rank = 1

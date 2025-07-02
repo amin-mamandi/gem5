@@ -416,3 +416,7 @@ Source('pybind11/stats.cc', add_tags='python')
 
 SimObject('m5/objects/SimObject.py', sim_objects=['SimObject'],
         enums=['ByteOrder'])
+
+# Custom components
+PySource('gem5.components.cachehierarchies.classic',
+    'gem5/components/cachehierarchies/classic/ndp_compatible_cache_hierarchy.py')

@@ -150,6 +150,10 @@ class BaseTrafficGen : public ClockedObject
 
     const int maxOutstandingReqs;
 
+    /** Target bandwidth in bytes per second (0 = no bandwidth limit) */
+    uint64_t targetBandwidth;
+
+    Tick calculatePeriodForBandwidth(uint64_t packet_size);
 
     /** Request port specialisation for the traffic generator */
     class TrafficGenPort : public RequestPort
@@ -225,6 +229,9 @@ class BaseTrafficGen : public ClockedObject
 
         /** Count the number of dropped requests. */
         statistics::Scalar numSuppressed;
+
+        /** Count the number of dropped requests. */
+        statistics::Scalar numSuppressedByFilter;
 
         /** Count the number of generated packets. */
         statistics::Scalar numPackets;

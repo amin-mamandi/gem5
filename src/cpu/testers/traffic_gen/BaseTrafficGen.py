@@ -105,9 +105,17 @@ class BaseTrafficGen(ClockedObject):
     dram_bitmask = Param.Unsigned(
         0x1E000, "DRAM bank bitmask (default: bits 15-18)"
     )
+<<<<<<< HEAD
     channel_bitmask = Param.Unsigned(
         0x380, "Channel bitmask (default: bits 7-9)"
     )
+=======
+
+    channel_bitmask = Param.Unsigned(
+        0x380, "Channel bitmask (default: bits 7-9)"
+    )
+
+>>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
     pseudo_channel_bitmask = Param.Unsigned(
         0x40, "Pseudo-channel bitmask (default: bit 6)"
     )
@@ -115,9 +123,17 @@ class BaseTrafficGen(ClockedObject):
     target_banks = VectorParam.Unsigned(
         [], "Target DRAM banks to filter (empty = no bank filtering)"
     )
+<<<<<<< HEAD
     target_channels = VectorParam.Unsigned(
         [], "Target channels to filter (empty = no channel filtering)"
     )
+=======
+
+    target_channels = VectorParam.Unsigned(
+        [], "Target channels to filter (empty = no channel filtering)"
+    )
+
+>>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
     target_pseudo_channels = VectorParam.Unsigned(
         [],
         "Target pseudo-channels to filter",
@@ -126,11 +142,26 @@ class BaseTrafficGen(ClockedObject):
     min_period = Param.Unsigned(
         100, "Minimum period between requests in nanoseconds"
     )
+<<<<<<< HEAD
     max_period = Param.Unsigned(
         1000, "Maximum period between requests in nanoseconds"
     )
     rd_ratio = Param.Unsigned(50, "Percentage of requests that are reads")
 
+=======
+
+    max_period = Param.Unsigned(
+        1000, "Maximum period between requests in nanoseconds"
+    )
+
+    rd_ratio = Param.Unsigned(50, "Percentage of requests that are reads")
+
+    target_bandwidth = Param.UInt64(
+        15 * 1024 * 1024 * 1024,
+        "Target bandwidth in bytes per second (0 = no bandwidth limit)",
+    )
+
+>>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
     @classmethod
     def memory_mode(cls):
         return "timing"

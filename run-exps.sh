@@ -6,9 +6,10 @@
 
 MODE=${1:-auto}
 DEBUG_MODE=${2:-0}
-MAX_PROCESSES=13
-CHECKPOINT_BASE_DIR="/home/RTSS2025/riscv"
-GEM5_CMD="./build/RISCV/gem5.opt"
+MAX_PROCESSES=20
+CHECKPOINT_BASE_DIR="/home/gem5/Xperiments"
+SCRIPTS_DIR="/home/gem5/scripts"
+GEM5_CMD="./build/RISCV/gem5.fast"
 SCRIPT="configs/example/gem5_library/riscv-fs.py"
 
 # Validate mode argument
@@ -25,23 +26,28 @@ fi
 # Add debug flags if debug mode is enabled
 if [ "$DEBUG_MODE" -eq 1 ]; then
     echo "Debug mode enabled"
-    GEM5_CMD="$GEM5_CMD --debug-flags=MemGuardWatch"
+    GEM5_CMD="$GEM5_CMD --debug-flags=HBM"
 else
     echo "Debug mode disabled"
 fi
 
-# List of experiment names
 experiment_names=(
-    "test"
+
+    "matrix-ddr-512"
+    "matrix-hbm-512"
+    "matrix-ddr-512-64mshr"
+    "matrix-hbm-512-64mshr"
+
 )
+
 
 # Array to keep track of running processes
 declare -A running_processes
 declare -A process_experiments
 
-# Function to count currently running gem5.opt processes
+# Function to count currently running gem5.fast processes
 count_gem5_processes() {
-    pgrep -c "gem5.opt" 2>/dev/null || echo "0"
+    pgrep -c "gem5.fast" 2>/dev/null || echo "0"
 }
 
 # ==================== BASE CHECKPOINT FUNCTIONS ====================
@@ -124,6 +130,7 @@ create_base_checkpoint() {
 start_experiment_checkpoint_process() {
     local exp_name="$1"
     local output_dir="${CHECKPOINT_BASE_DIR}/${exp_name}"
+    # local script_file=$(get_script_file_for_experiment "$exp_name")
 
     echo "[$(date)] Starting checkpoint creation for: $exp_name"
 
@@ -131,7 +138,7 @@ start_experiment_checkpoint_process() {
     mkdir -p "$output_dir"
 
     # Build the command for experiment checkpoint creation
-    local full_cmd="$GEM5_CMD --outdir=$output_dir $SCRIPT $exp_name ckpt"
+    local full_cmd="$GEM5_CMD --outdir=$output_dir $SCRIPT $exp_name ckpt ${exp_name}.sh"
 
     echo "  Command: $full_cmd"
 
@@ -259,6 +266,8 @@ monitor_experiment_checkpoint_processes() {
                         ((term_wait++))
                     done
 
+                    find . -type f \( -name 'board.platform.terminal' -o -name 'config.ini' \) -exec cp {} {}.ckptLog \;
+
                     # If still running, force kill
                     if kill -0 "$pid" 2>/dev/null; then
                         echo "  → Process still running, sending SIGKILL..."
@@ -306,11 +315,13 @@ experiment_completed() {
 start_experiment_run() {
     local exp_name="$1"
     local output_dir="${CHECKPOINT_BASE_DIR}/${exp_name}"
+    # local script_file=$(get_script_file_for_experiment "$exp_name")
+
 
     echo "[$(date)] Starting experiment run for: $exp_name"
 
     # Build the command (using 'run' mode to load from checkpoint)
-    local full_cmd="$GEM5_CMD --outdir=$output_dir $SCRIPT $exp_name run"
+    local full_cmd="$GEM5_CMD --outdir=$output_dir $SCRIPT $exp_name run ${exp_name}.sh"
 
     echo "  Command: $full_cmd"
 
@@ -412,16 +423,18 @@ create_experiment_checkpoints_phase() {
         wait_for_slot "checkpoint"
 
         # Start the checkpoint process
-        start_experiment_checkpoint_process "$exp_name"
+        if start_experiment_checkpoint_process "$exp_name"; then
+            # Small delay to avoid overwhelming the system
+            sleep 2
 
-        # Small delay to avoid overwhelming the system
-        sleep 2
+            # Monitor running processes
+            monitor_experiment_checkpoint_processes
 
-        # Monitor running processes
-        monitor_experiment_checkpoint_processes
-
-        echo "Currently running: $(count_gem5_processes)/$MAX_PROCESSES processes"
-        echo ""
+            echo "Currently running: $(count_gem5_processes)/$MAX_PROCESSES processes"
+            echo ""
+        else
+            echo "  ✗ Failed to start checkpoint process for $exp_name"
+        fi
     done
 
     # Wait for all remaining processes to complete
@@ -561,12 +574,15 @@ run_experiments_phase() {
 # ==================== MAIN EXECUTION ====================
 
 echo "Starting combined manager in $MODE mode"
+echo "Scripts directory: $SCRIPTS_DIR"
 echo "Maximum concurrent processes: $MAX_PROCESSES"
 echo "Total experiments to process: ${#experiment_names[@]}"
 echo "Checkpoint base directory: $CHECKPOINT_BASE_DIR"
 
 # Create base checkpoint directory if it doesn't exist
 mkdir -p "$CHECKPOINT_BASE_DIR"
+mkdir -p "$SCRIPTS_DIR"
+
 
 if [ "$MODE" = "auto" ]; then
     echo ""

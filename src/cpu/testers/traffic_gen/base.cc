@@ -93,7 +93,12 @@ BaseTrafficGen::BaseTrafficGen(const BaseTrafficGenParams &p)
       maxPeriod(p.max_period),
       readRatio(p.rd_ratio),
       checkSystemFlagEvent([this]{ checkSystemFlag(); }, name()),
+<<<<<<< HEAD
       trafficStarted(false)
+=======
+      trafficStarted(false),
+      targetBandwidth(p.target_bandwidth)
+>>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
 {
 }
 
@@ -101,6 +106,26 @@ BaseTrafficGen::~BaseTrafficGen()
 {
 }
 
+<<<<<<< HEAD
+=======
+Tick
+BaseTrafficGen::calculatePeriodForBandwidth(uint64_t packet_size)
+{
+    if (targetBandwidth == 0) {
+        return minPeriod;
+    }
+
+    // Calculate period more conservatively
+    double period_in_seconds = (double)packet_size / targetBandwidth;
+    Tick calculated_period = (Tick)(period_in_seconds * 1e12);
+
+    // Don't go below minimum period
+    calculated_period = std::max(calculated_period, minPeriod);
+
+    return calculated_period;
+}
+
+>>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
 void
 BaseTrafficGen::startup()
 {
@@ -284,6 +309,7 @@ BaseTrafficGen::update()
     } else {
         assert(curTick() >= nextPacketTick);
 
+<<<<<<< HEAD
         size_t current_outstanding = waitingResp.size();
 
         // ADAPTIVE STRATEGY: Allow bursts when system is responsive
@@ -314,7 +340,15 @@ BaseTrafficGen::update()
         }
 
         // Continue with normal packet generation...
+=======
+        // get the next packet and try to send it
+>>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
         PacketPtr pkt = activeGenerator->getNextPacket();
+        if (pkt) {
+            pkt->req->setFlags(pkt->req->getFlags() | Request::UNCACHEABLE);
+            DPRINTF(TrafficGen, "%s: Generated packet: %s\n",
+                name().c_str(), pkt ? "SUCCESS" : "NULL");
+        }
 
         // If generating stream/substream IDs are enabled,
         // try to pick and assign them to the new packet
@@ -333,6 +367,10 @@ BaseTrafficGen::update()
         bool passes_address_filter = true;
         if (pkt && is_memory_addr) {
             passes_address_filter = shouldFilterAddress(pkt->getAddr());
+<<<<<<< HEAD
+=======
+
+>>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
         }
 
         if (pkt && is_memory_addr && passes_address_filter) {
@@ -344,20 +382,39 @@ BaseTrafficGen::update()
                 retryPktTick = curTick();
             }
         } else if (pkt) {
-            DPRINTF(TrafficGen, "Suppressed packet %s 0x%x\n",
-                    pkt->cmdString(), pkt->getAddr());
+            // Packet filtered out - delete it and continue
+            if (!is_memory_addr) {
+                ++stats.numSuppressed;
+            } else if (!passes_address_filter) {
+                ++stats.numSuppressedByFilter;
+            }
 
+<<<<<<< HEAD
             ++stats.numSuppressed;
+=======
+            if (!(static_cast<int>(stats.numSuppressed.value()) % 1000000)) {
+                // warn("%s suppressed %d packets\n",
+                // name(), stats.numSuppressed.value());
+            }
+
+>>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
             delete pkt;
             pkt = nullptr;
         }
     }
 
-    // if we are waiting for a retry or for a response, do not schedule any
-    // further events, in the case of a transition or a successful send, go
-    // ahead and determine when the next update should take place
+    // If waiting for retry or response, don't schedule more events.
+    // On transition or successful send, schedule next update.
     if (retryPkt == NULL) {
-        nextPacketTick = activeGenerator->nextPacketTick(elasticReq, 0);
+        if (targetBandwidth > 0) {
+            // Use calculated period for bandwidth control
+            nextPacketTick = curTick() +
+                calculatePeriodForBandwidth(64);
+        } else {
+            // Use original period calculation
+            nextPacketTick =
+                activeGenerator->nextPacketTick(elasticReq, 0);
+        }
         scheduleUpdate();
     }
 }
@@ -373,6 +430,7 @@ BaseTrafficGen::createSimpleGenerator()
         gen_id = std::stoi(id_str) - 1;
     }
 
+<<<<<<< HEAD
     Tick duration = 20000000000;      // 20 billion ticks
     Addr base_start = 0x200000000;
     Addr base_end = 0x400000000;
@@ -387,11 +445,33 @@ BaseTrafficGen::createSimpleGenerator()
     Addr block_size = 64;  // 2x larger blocks = 2x bandwidth with same count
     // Or even: Addr block_size = 256;  // 4x larger blocks = 4x bandwidth
 
+=======
+    Tick duration = 50000000000;
+
+    // Ensure COMPLETELY separate address ranges
+    Addr base_start = 0x200000000;
+    Addr base_end   = 0x280000000;
+    Addr total_size = base_end - base_start;
+
+    // Divide address space with gaps to avoid cache line conflicts
+    Addr space_per_gen = total_size / 4;
+    Addr start_addr = base_start + gen_id * space_per_gen * 2;
+    Addr end_addr = start_addr + space_per_gen;
+
+    // Ensure cache line alignment (64-byte boundaries)
+    start_addr = (start_addr + 63) & ~63ULL;
+    end_addr = end_addr & ~63ULL;
+
+
+
+    Addr block_size = 64;
+>>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
     Tick min_period = minPeriod;
     Tick max_period = maxPeriod;
     uint8_t read_percent = readRatio;
     Addr data_limit = 0;
 
+<<<<<<< HEAD
     // BANDWIDTH TRICK 2: Use DRAM generator for burst patterns
     // This generates more efficient memory access patterns
     unsigned int num_seq_pkts = 8;         // 8 sequential packets per burst
@@ -419,6 +499,45 @@ BaseTrafficGen::createSimpleGenerator()
                                     nbr_of_ranks);
         DPRINTF(TrafficGen, "DRAM generator %s: seq_pkts=%u\n",
                 name().c_str(), num_seq_pkts);
+=======
+    if (gen_id == 0) {
+        // DRAM generator with guaranteed non-overlapping range
+        unsigned int num_seq_pkts = 16; // Number of sequential packets
+        unsigned int page_size = 4096;  // 4KB page size
+        unsigned int nbr_of_banks = 16;
+        unsigned int nbr_of_banks_util = 16;
+        enums::AddrMap addr_mapping = enums::RoRaBaCoCh;
+        unsigned int nbr_of_ranks = 1;
+
+        storedGenerator = createDram(
+            duration,
+            start_addr,
+            end_addr,
+            block_size,
+            min_period,
+            max_period,
+            read_percent,
+            data_limit,
+            num_seq_pkts,
+            page_size,
+            nbr_of_banks,
+            nbr_of_banks_util,
+            addr_mapping,
+            nbr_of_ranks
+        );
+    } else {
+        // Random generator with non-overlapping range
+        storedGenerator = createRandom(
+            duration,
+            start_addr,
+            end_addr,
+            block_size,
+            min_period,
+            max_period,
+            read_percent,
+            data_limit
+        );
+>>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
     }
 }
 
@@ -509,9 +628,14 @@ BaseTrafficGen::retryReq()
         stats.retryTicks += delay;
 
         if (drainState() != DrainState::Draining) {
-            // packet is sent, so find out when the next one is due
-            nextPacketTick = activeGenerator->nextPacketTick(elasticReq,
-                                                             delay);
+            // Apply bandwidth control even during retries
+            if (targetBandwidth > 0) {
+                nextPacketTick = curTick() +
+                    calculatePeriodForBandwidth(64);
+            } else {
+                nextPacketTick =
+                    activeGenerator->nextPacketTick(elasticReq, delay);
+            }
             scheduleUpdate();
         } else {
             // shut things down
@@ -533,6 +657,8 @@ BaseTrafficGen::StatGroup::StatGroup(statistics::Group *parent)
     : statistics::Group(parent),
       ADD_STAT(numSuppressed, statistics::units::Count::get(),
                "Number of suppressed packets to non-memory space"),
+      ADD_STAT(numSuppressedByFilter, statistics::units::Count::get(),
+               "Number of suppressed packets by address filter"),
       ADD_STAT(numPackets, statistics::units::Count::get(),
                "Number of packets generated"),
       ADD_STAT(numRetries, statistics::units::Count::get(),
