@@ -266,6 +266,11 @@ class BaseCache : public ClockedObject
 
         bool isBlocked() const { return blocked; }
 
+        /**
+         * Handle unblock requests from the connected request port
+         */
+        virtual bool handleUnblockRequest();
+
       protected:
 
         CacheResponsePort(const std::string &_name, BaseCache& _cache,
@@ -572,6 +577,11 @@ class BaseCache : public ClockedObject
      * @param pkt The current bus transaction.
      */
     virtual void recvTimingSnoopReq(PacketPtr pkt) = 0;
+
+    /**
+     * Unblock the cache port
+     */
+    virtual bool unblockCache() = 0;
 
     /**
      * Handle a snoop response.
@@ -1367,6 +1377,11 @@ class BaseCache : public ClockedObject
      */
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
+
+    bool is_dcache;
+    /** CPU ID for this cache (for private caches) */
+    const uint8_t cpu_id = -1;
+
 };
 
 /**

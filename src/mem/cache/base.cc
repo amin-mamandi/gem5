@@ -83,7 +83,8 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
       cpuSidePort (p.name + ".cpu_side_port", *this, "CpuSidePort"),
       memSidePort(p.name + ".mem_side_port", this, "MemSidePort"),
       accessor(*this),
-      mshrQueue("MSHRs", p.mshrs, 0, p.demand_mshr_reserve, p.name),
+      mshrQueue("MSHRs", p.mshrs, 0, p.demand_mshr_reserve, p.name,
+                p.system, p.is_dCache, p.cpu_id),
       writeBuffer("write buffer", p.write_buffers, p.mshrs, p.name),
       tags(p.tags),
       compressor(p.compressor),
@@ -114,7 +115,9 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
       missCount(p.max_miss_count),
       addrRanges(p.addr_ranges.begin(), p.addr_ranges.end()),
       system(p.system),
-      stats(*this)
+      stats(*this),
+      is_dcache(p.is_dCache),
+      cpu_id(p.cpu_id)
 {
     // the MSHR queue has no reserve entries as we check the MSHR
     // queue on every single allocation, whereas the write queue has
@@ -182,6 +185,26 @@ BaseCache::CacheResponsePort::processSendRetry()
     mustSendRetry = false;
     sendRetryReq();
 }
+
+bool
+BaseCache::CacheResponsePort::handleUnblockRequest()
+{
+
+    if (isBlocked()) {
+        cache.clearBlocked(Blocked_NoMSHRs);
+        DPRINTF(CachePort, "Unblocking port %s\n", name());
+        return true;
+    }
+    else{
+        DPRINTF(CachePort, "Port %s is not blocked,
+                ignoring unblock request\n", name());
+        // We are not blocked, so we do not have to do anything.
+        // This is the case for coherent caches, which do not block
+        // on MSHR or write buffer availability.
+        return false;
+    }
+}
+
 
 Addr
 BaseCache::regenerateBlkAddr(CacheBlk* blk)

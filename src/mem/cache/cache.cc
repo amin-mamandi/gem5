@@ -262,6 +262,13 @@ Cache::doWritebacksAtomic(PacketList& writebacks)
     }
 }
 
+bool
+Cache::unblockCache()
+{
+    // We are a coherent cache and therefore we do not have
+    // anything to unblock.
+    return false;
+}
 
 void
 Cache::recvTimingSnoopResp(PacketPtr pkt)

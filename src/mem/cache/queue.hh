@@ -54,10 +54,12 @@
 #include "base/trace.hh"
 #include "base/types.hh"
 #include "debug/Drain.hh"
+#include "debug/MemGuardQueue.hh"
 #include "mem/cache/queue_entry.hh"
 #include "mem/packet.hh"
 #include "sim/cur_tick.hh"
 #include "sim/drain.hh"
+#include "sim/system.hh"
 
 namespace gem5
 {
@@ -101,6 +103,10 @@ class Queue : public Drainable, public Named
     /** Holds non allocated entries. */
     typename Entry::List freeList;
 
+    System *system;
+    bool is_dcache;
+    uint8_t cpu_id;
+
     typename Entry::Iterator addToReadyList(Entry* entry)
     {
         if (readyList.empty() ||
@@ -135,6 +141,27 @@ class Queue : public Drainable, public Named
         Named(name),
         label(_label), numEntries(num_entries + reserve),
         numReserve(reserve), entries(numEntries, name + ".entry"),
+        system(nullptr), is_dcache(false), cpu_id(0),
+        _numInService(0), allocated(0)
+    {
+        for (int i = 0; i < numEntries; ++i) {
+            freeList.push_back(&entries[i]);
+        }
+    }
+
+    /**
+     * Create a queue with a given number of entries.
+     *
+     * @param num_entries The number of entries in this queue.
+     * @param reserve The extra overflow entries needed.
+     */
+    Queue(const std::string &_label, int num_entries, int reserve,
+            const std::string &name, System *sys,
+            bool dcache_flag, uint8_t core_id) :
+        Named(name),
+        label(_label), numEntries(num_entries + reserve),
+        numReserve(reserve), entries(numEntries, name + ".entry"),
+        system(sys), is_dcache(dcache_flag), cpu_id(core_id),
         _numInService(0), allocated(0)
     {
         for (int i = 0; i < numEntries; ++i) {
@@ -149,7 +176,31 @@ class Queue : public Drainable, public Named
 
     bool isFull() const
     {
-        return (allocated >= numEntries - numReserve);
+        // First check normal capacity
+        bool normallyFull = (allocated >= numEntries - numReserve);
+
+        // If we're actually full, return true regardless of MemGuard
+        if (normallyFull) {
+            return true;
+        }
+
+        // MemGuard check
+        if (is_dcache && system->isMemGuardEnabled()) {
+            if (system->isMemGuardEnabledForCore(cpu_id) &&
+                system->coreMemBudget[cpu_id] == 0) {
+                DPRINTF(MemGuardQueue, "MSHR: core %d, b
+                        locking MSHR allocation. Allocated: %d,
+                        Available: %d\n",
+                        cpu_id, allocated,
+                        numEntries - numReserve - allocated);
+                return true;
+            }
+
+        }
+
+        return false;
+
+        // return (allocated >= numEntries - numReserve);
     }
 
     int numInService() const

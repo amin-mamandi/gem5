@@ -143,6 +143,14 @@ NoncoherentCache::recvTimingReq(PacketPtr pkt)
     BaseCache::recvTimingReq(pkt);
 }
 
+bool
+NoncoherentCache::unblockCache()
+{
+    // We are a non-coherent cache and therefore we do not have
+    // anything to unblock.
+    return false;
+}
+
 PacketPtr
 NoncoherentCache::createMissPacket(PacketPtr cpu_pkt, CacheBlk *blk,
                                    bool needs_writable,

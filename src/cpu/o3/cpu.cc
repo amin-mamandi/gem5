@@ -52,6 +52,7 @@
 #include "cpu/thread_context.hh"
 #include "debug/Activity.hh"
 #include "debug/Drain.hh"
+#include "debug/MemGuardCore.hh"
 #include "debug/O3CPU.hh"
 #include "debug/Quiesce.hh"
 #include "enums/MemoryMode.hh"
@@ -365,6 +366,28 @@ CPU::tick()
     DPRINTF(O3CPU, "\n\nO3CPU: Ticking main, O3CPU.\n");
     assert(!switchedOut());
     assert(drainState() != DrainState::Drained);
+
+    // Memguard
+    if (system->isMemGuardEnabled() &&
+        system->isMemGuardEnabledForCore(cpuId()))
+    {
+        if (!(system->getCycleInitCore(cpuId())))
+            system->setCycleInitCore(cpuId(), curCycle());
+
+        if ((curCycle() - system->getCycleInitCore(cpuId())) >= 1000000)
+        {
+            DPRINTF(MemGuardCore,"CORE ==> Cycles elapsed: %llu,
+                resetting budget\n",
+                curCycle() - system->getCycleInitCore(cpuId()));
+
+            if (iew.ldstQueue.getDataPort().unblockCache())
+                DPRINTF(MemGuardCore,"CORE ==> Unblocked Cache\n");
+
+            // Reset budget - fetch will automatically resume
+            system->resetCoreMemBudget(cpuId());
+            system->setCycleInitCore(cpuId(), curCycle());
+        }
+    }
 
     ++baseStats.numCycles;
     updateCycleCounters(BaseCPU::CPU_STATE_ON);

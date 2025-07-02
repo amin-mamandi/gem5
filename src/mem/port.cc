@@ -168,6 +168,20 @@ RequestPort::unbind()
     Port::unbind();
 }
 
+bool
+RequestPort::unblockCache()
+{
+    try {
+        if (_responsePort) {
+            return _responsePort->handleUnblockRequest();
+        }
+        return false;
+    } catch (UnboundPortException) {
+        reportUnbound();
+        return false;
+    }
+}
+
 AddrRangeList
 RequestPort::getAddrRanges() const
 {

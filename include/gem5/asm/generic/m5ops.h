@@ -68,10 +68,18 @@
 #define M5OP_PANIC              0x54
 
 #define M5OP_RESERVED1          0x55 // Reserved for user, used to be annotate
-#define M5OP_RESERVED2          0x56 // Reserved for user
-#define M5OP_RESERVED3          0x57 // Reserved for user
-#define M5OP_RESERVED4          0x58 // Reserved for user
-#define M5OP_RESERVED5          0x59 // Reserved for user
+// #define M5OP_RESERVED2          0x56 // Reserved for user
+// #define M5OP_RESERVED3          0x57 // Reserved for user
+// #define M5OP_RESERVED4          0x58 // Reserved for user
+// #define M5OP_RESERVED5          0x59 // Reserved for user
+
+// #define M5OP_SETMSHR            0x56 Add commentMore actions
+#define M5OP_SETMEMBUDGET       0x57
+#define M5OP_ENABLEMEMGUARD     0x58
+#define M5OP_MEDUSA             0x5e
+// #define M5OP_CLEARDM            0x5d
+// #define M5OP_MEDUSA             0x5e
+// #define M5OP_ENABLEWAYPART      0x5f
 
 #define M5OP_WORK_BEGIN         0x5a
 #define M5OP_WORK_END           0x5b
@@ -108,6 +116,8 @@
     M5OP(m5_work_end, M5OP_WORK_END)                            \
     M5OP(m5_dist_toggle_sync, M5OP_DIST_TOGGLE_SYNC)            \
     M5OP(m5_workload, M5OP_WORKLOAD)                            \
+    M5OP(m5_setmembudget, M5OP_SETMEMBUDGET)                    \
+    M5OP(m5_enablememguard, M5OP_ENABLEMEMGUARD)                \
 
 #define M5OP_MERGE_TOKENS_I(a, b) a##b
 #define M5OP_MERGE_TOKENS(a, b) M5OP_MERGE_TOKENS_I(a, b)

@@ -239,6 +239,16 @@ class RequestPort: public Port, public AtomicRequestProtocol,
             MemBackdoorPtr &backdoor);
 
   public:
+
+    /**
+     * Attempt to unblock the connected cache.
+     * This provides a way for the requestor to signal that
+     * any blocking conditions should be cleared.
+     *
+     * @return true if unblock was successful, false otherwise
+     */
+    virtual bool unblockCache();
+
     /* The timing protocol. */
 
     /**
@@ -349,6 +359,16 @@ class ResponsePort : public Port, public AtomicResponseProtocol,
 {
     friend class RequestPort;
 
+  public:
+
+    /**
+     * Handle unblock requests from connected request port.
+     * Default implementation does nothing.
+     */
+    virtual bool handleUnblockRequest() {
+        panic("ResponsePort::handleUnblockRequest: unblock not supported\n");
+        return false;
+    }
   private:
     RequestPort* _requestPort;
 

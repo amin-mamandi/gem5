@@ -52,6 +52,7 @@
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Loader.hh"
+#include "debug/MemGuardSys.hh"
 #include "debug/Quiesce.hh"
 #include "debug/WorkItems.hh"
 #include "mem/abstract_mem.hh"
@@ -181,8 +182,27 @@ System::System(const Params &p)
       _m5opRange(p.m5ops_base ?
                  RangeSize(p.m5ops_base, 0x10000) :
                  AddrRange(1, 0)), // Create an empty range if disabled
-      redirectPaths(p.redirect_paths)
-{
+    redirectPaths(p.redirect_paths),
+    memGuardEnabled(false),
+    startTrafficGen(false)
+    {
+    // Initialize memguard arrays
+    for (int i = 0; i < MaxCores; i++) {
+        memGuardEnabledForCore[i] = false;
+        coreMemBudget[i] = 0;
+        coreBudgetInit[i] = 0;
+        coreBudgetResetTime[i] = 0;
+        cycleInitCore[i] = 0;
+    }
+    // Initialize per bank memory budget arrays
+    for (int i = 0; i < MaxBanks; i++) {
+        bankMemBudget[i] = 0;
+        bankBudgetInit[i] = 0;
+        bankBudgetResetTime[i] = 0;
+        memGuardEnabledForBank[i] = false;
+        cycleInitBank[i] = 0;
+    }
+
     panic_if(!workload, "No workload set for system %s "
             "(could use StubWorkload?).", name());
     workload->setSystem(this);
@@ -231,6 +251,112 @@ System::setMemoryMode(enums::MemoryMode mode)
 {
     assert(drainState() == DrainState::Drained);
     memoryMode = mode;
+}
+
+void
+System::setMemGuardEnabled(bool enabled)
+{
+    memGuardEnabled = enabled;
+}
+
+void
+System::enableMemGuardForCore(int core_id, bool enable)
+{
+    DPRINTF(MemGuardSys, "Setting memguard for core %d to %s\n",
+            core_id, enable ? "enabled" : "disabled");
+    memGuardEnabledForCore[core_id] = enable;
+}
+
+bool
+System::isMemGuardEnabledForCore(int core_id) const
+{
+    DPRINTF(MemGuardSys, "Checking memguard for core %d: %s\n",
+            core_id, memGuardEnabledForCore[core_id] ? "enabled" : "disabled");
+    return memGuardEnabledForCore[core_id];
+}
+
+uint64_t
+System::getCoreMemBudget(int core_id) const
+{
+    return coreMemBudget[core_id];
+}
+
+void
+System::resetCoreMemBudget(int core_id)
+{
+    DPRINTF(MemGuardSys,
+            "Resetting memguard budget for core %d to initial %d\n",
+            core_id, coreBudgetInit[core_id]);
+    coreMemBudget[core_id] = coreBudgetInit[core_id];
+}
+
+void
+System::setBudgetInitCore(int core_id, uint64_t budget)
+{
+    enableMemGuardForCore(core_id, true);
+    coreBudgetInit[core_id] = budget;
+}
+
+void
+System::setCycleInitCore(int core_id, uint64_t cycle)
+{
+    cycleInitCore[core_id] = cycle;
+}
+
+uint64_t
+System::getCycleInitCore(int core_id) const
+{
+    return cycleInitCore[core_id];
+}
+
+void
+System::enableMemGuardForBank(int bank_id, bool enable)
+{
+    DPRINTF(MemGuardSys, "Setting memguard for bank %d to %s\n",
+            bank_id, enable ? "enabled" : "disabled");
+    memGuardEnabledForBank[bank_id] = enable;
+}
+
+bool
+System::isMemGuardEnabledForBank(int bank_id) const
+{
+    DPRINTF(MemGuardSys, "Checking memguard for bank %d: %s\n",
+            bank_id, memGuardEnabledForBank[bank_id] ? "enabled" : "disabled");
+    return memGuardEnabledForBank[bank_id];
+}
+
+uint64_t
+System::getBankMemBudget(int bank_id) const
+{
+    return bankMemBudget[bank_id];
+}
+
+void
+System::resetBankMemBudget(int bank_id)
+{
+    DPRINTF(MemGuardSys,
+            "Resetting memguard budget for bank %d to initial %d\n",
+            bank_id, bankBudgetInit[bank_id]);
+    bankMemBudget[bank_id] = bankBudgetInit[bank_id];
+}
+
+void
+System::setBudgetInitBank(int bank_id, uint64_t budget)
+{
+    enableMemGuardForBank(bank_id, true);
+    bankBudgetInit[bank_id] = budget;
+}
+
+void
+System::setCycleInitBank(int bank_id, uint64_t cycle)
+{
+    cycleInitBank[bank_id] = cycle;
+}
+
+uint64_t
+System::getCycleInitBank(int bank_id) const
+{
+    return cycleInitBank[bank_id];
 }
 
 void

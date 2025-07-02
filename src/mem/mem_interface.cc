@@ -73,6 +73,8 @@ MemInterface::MemInterface(const MemInterfaceParams &_p)
       numWritesQueued(0)
 {}
 
+uint16_t MemInterface::Bank::global_bank_counter = 0;
+
 void
 MemInterface::setCtrl(MemCtrl* _ctrl, unsigned int command_window,
                                             uint8_t pseudo_channel)

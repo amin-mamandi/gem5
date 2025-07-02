@@ -54,6 +54,7 @@
 
 #include "base/callback.hh"
 #include "base/statistics.hh"
+#include "debug/MemGuardWatch.hh"
 #include "enums/MemSched.hh"
 #include "mem/qos/mem_ctrl.hh"
 #include "mem/qport.hh"
@@ -145,6 +146,8 @@ class MemPacket
      */
     unsigned int size;
 
+    const uint16_t myBankId; // Unique bank ID for this packet
+
     /**
      * A pointer to the BurstHelper if this MemPacket is a split packet
      * If not a split packet (common case), this is set to NULL
@@ -205,12 +208,12 @@ class MemPacket
 
     MemPacket(PacketPtr _pkt, bool is_read, bool is_dram, uint8_t _channel,
                uint8_t _rank, uint8_t _bank, uint32_t _row, uint16_t bank_id,
-               Addr _addr, unsigned int _size)
+               Addr _addr, unsigned int _size, uint16_t my_bank_id)
         : entryTime(curTick()), readyTime(curTick()), pkt(_pkt),
           _requestorId(pkt->requestorId()),
           read(is_read), dram(is_dram), pseudoChannel(_channel), rank(_rank),
           bank(_bank), row(_row), bankId(bank_id), addr(_addr), size(_size),
-          burstHelper(NULL), _qosValue(_pkt->qosValue())
+          myBankId(my_bank_id), burstHelper(NULL), _qosValue(_pkt->qosValue())
     { }
 
 };
@@ -345,6 +348,25 @@ class MemCtrl : public qos::MemCtrl
      */
     bool addToReadQueue(PacketPtr pkt, unsigned int pkt_count,
                         MemInterface* mem_intr);
+
+    /**
+     * get the cpuid of the memory controller
+     * @param bank The bank number
+     * @return The cpuid of the memory controller
+     */
+     uint8_t getCpuid(uint8_t bank);
+
+     /**
+      * set memory bandwidth regulation for the given cpu_id
+      * @param cpu_id The cpu id
+      */
+     void memGuard(uint8_t cpu_id);
+
+     /**
+      * set memory bandwidth regulation for the given bank_id
+      * @param bank_id The bank id
+      */
+      void memGuardBank(uint16_t bank_id);
 
     /**
      * Decode the incoming pkt, create a mem_pkt and push to the
@@ -617,6 +639,13 @@ class MemCtrl : public qos::MemCtrl
         // per-requestor raed and write average memory access latency
         statistics::Formula requestorReadAvgLat;
         statistics::Formula requestorWriteAvgLat;
+
+        statistics::Vector bankReadBytes;
+        statistics::Vector bankWriteBytes;
+        statistics::Formula bank0ReadRate;
+        statistics::Formula bank0WriteRate;
+        statistics::Formula bank1ReadRate;
+        statistics::Formula bank1WriteRate;
     };
 
     CtrlStats stats;

@@ -91,6 +91,8 @@ class NoncoherentCache : public BaseCache
         panic("Unexpected timing snoop request %s", pkt->print());
     }
 
+    bool unblockCache() override;
+
     void recvTimingSnoopResp(PacketPtr pkt) override {
         panic("Unexpected timing snoop response %s", pkt->print());
     }

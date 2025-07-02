@@ -302,6 +302,66 @@ class System : public SimObject, public PCEventScope
     void setMemoryMode(enums::MemoryMode mode);
     /** @} */
 
+    // Enable or disable memory guard globally
+    void setMemGuardEnabled(bool enabled);
+
+    // Check if memory guard is enabled globally
+    bool isMemGuardEnabled() const { return memGuardEnabled; }
+
+    /** @{ */
+    /**
+     * Memory Guard Functions
+     */
+
+    // Set the memory budget for a specific CPU core
+    void setCoreMemBudget(int core_id, uint64_t budget);
+
+    // Get the memory budget for a specific CPU core
+    uint64_t getCoreMemBudget(int core_id) const;
+
+    // Reset the memory budget for a specific CPU core
+    void resetCoreMemBudget(int core_id);
+
+    // Enable memory guard for a specific CPU core
+    void enableMemGuardForCore(int core_id, bool enable);
+
+    // Check if memory guard is enabled for a specific CPU core
+    bool isMemGuardEnabledForCore(int core_id) const;
+
+    // Set initial budget for a core
+    void setBudgetInitCore(int core_id, uint64_t budget);
+
+    // Cycle initialization functions
+    void setCycleInitCore(int core_id, uint64_t cycle);
+    uint64_t getCycleInitCore(int core_id) const;
+
+    /**
+     * Per-Bank Memory Guard Functions
+     */
+
+    // Set the memory budget for a specific CPU core
+    void setBankMemBudget(int bank_id, uint64_t budget);
+
+    // Get the memory budget for a specific CPU core
+    uint64_t getBankMemBudget(int bank_id) const;
+
+    // Reset the memory budget for a specific CPU core
+    void resetBankMemBudget(int bank_id);
+
+    // Enable memory guard for a specific CPU core
+    void enableMemGuardForBank(int bank_id, bool enable);
+
+    // Check if memory guard is enabled for a specific CPU core
+    bool isMemGuardEnabledForBank(int bank_id) const;
+
+    // Set initial budget for a core
+    void setBudgetInitBank(int bank_id, uint64_t budget);
+
+    // Cycle initialization functions
+    void setCycleInitBank(int bank_id, uint64_t cycle);
+    uint64_t getCycleInitBank(int bank_id) const;
+
+    /** @} */
     /**
      * Get the cache line size of the system.
      */
@@ -420,6 +480,32 @@ class System : public SimObject, public PCEventScope
 
     ThermalModel * thermalModel;
 
+  public:
+
+    // Maximum number of supported cores (adjust as needed)
+    static constexpr size_t MaxCores = 4;
+
+    // Maximum number of supported banks (adjust as needed)
+    static constexpr size_t MaxBanks = 256;
+
+    // Memory Guard related member variables
+    bool memGuardEnabled;
+
+    bool memGuardEnabledForCore[MaxCores];
+    uint64_t coreMemBudget[MaxCores];
+    uint64_t coreBudgetInit[MaxCores];
+    Tick coreBudgetResetTime[MaxCores];
+    uint64_t cycleInitCore[MaxCores];
+
+    // Per-bank memory guard variables
+    bool memGuardEnabledForBank[MaxBanks];
+    uint64_t bankMemBudget[MaxBanks];
+    uint64_t bankBudgetInit[MaxBanks];
+    Tick bankBudgetResetTime[MaxBanks];
+    uint64_t cycleInitBank[MaxBanks];
+
+    bool startTrafficGen;
+
   protected:
     /**
      * Strips off the system name from a requestor name
@@ -493,6 +579,30 @@ class System : public SimObject, public PCEventScope
 
     /** Get the number of requestors registered in the system */
     RequestorID maxRequestors() { return requestors.size(); }
+
+    int getCpuId(RequestorID requestor_id)
+    {
+      // Get the requestor name
+      std::string requestorName = getRequestorName(requestor_id);
+
+      // Use a simple approach with pairs
+      static const std::pair<std::string, int> cpuPatterns[] = {
+        {"core0", 0}, {"cores0", 0},
+        {"core1", 1}, {"cores1", 1},
+        {"core2", 2}, {"cores2", 2},
+        {"core3", 3}, {"cores3", 3}
+      };
+
+      // Check if the requestor name contains any of the patterns
+      for (const auto& pair : cpuPatterns) {
+          if (requestorName.find(pair.first) != std::string::npos) {
+              return pair.second;
+          }
+      }
+
+      // No match found
+      return -1;
+    }
 
   protected:
     /** helper function for getRequestorId */

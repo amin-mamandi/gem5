@@ -85,6 +85,8 @@ class MemInterface : public AbstractMemory
      */
     class Bank
     {
+      private:
+        static uint16_t global_bank_counter;  // Static counter for unique IDs
 
       public:
         static const uint32_t NO_ROW = -1;
@@ -92,6 +94,7 @@ class MemInterface : public AbstractMemory
         uint32_t openRow;
         uint8_t bank;
         uint8_t bankgr;
+        uint16_t bankId;        // Global unique bank ID
 
         Tick rdAllowedAt;
         Tick wrAllowedAt;
@@ -102,10 +105,22 @@ class MemInterface : public AbstractMemory
         uint32_t bytesAccessed;
 
         Bank() :
-            openRow(NO_ROW), bank(0), bankgr(0),
+            openRow(NO_ROW), bank(0), bankgr(0), bankId(global_bank_counter++),
             rdAllowedAt(0), wrAllowedAt(0), preAllowedAt(0), actAllowedAt(0),
             rowAccesses(0), bytesAccessed(0)
         { }
+
+        /**
+         * Get the unique bank ID
+         * @return Global unique bank identifier
+         */
+        uint16_t getBankId() const { return bankId; }
+
+        /**
+         * Set the unique bank ID
+         * @param id Global unique bank identifier
+         */
+        void setBankId(uint16_t id) { bankId = id; }
     };
 
     /**
@@ -125,6 +140,8 @@ class MemInterface : public AbstractMemory
      */
     enums::AddrMap addrMapping;
 
+  public:
+
     /**
      * General device and channel characteristics
      * The rowsPerBank is determined based on the capacity, number of
@@ -140,6 +157,8 @@ class MemInterface : public AbstractMemory
     const uint32_t ranksPerChannel;
     const uint32_t banksPerRank;
     uint32_t rowsPerBank;
+
+  protected:
 
     /**
      * General timing requirements

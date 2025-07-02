@@ -163,6 +163,7 @@ DebugFlag("DRAMsim3")
 DebugFlag('HMCController')
 DebugFlag('SerialLink')
 DebugFlag('TokenPort')
+DebugFlag('MemGuardWatch')
 
 DebugFlag("MemChecker")
 DebugFlag("MemCheckerMonitor")

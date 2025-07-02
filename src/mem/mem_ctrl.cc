@@ -185,6 +185,59 @@ MemCtrl::writeQueueFull(unsigned int neededEntries) const
     return  wrsize_new > writeBufferSize;
 }
 
+// Return the cpuid based on the bank number
+uint8_t
+MemCtrl::getCpuid(uint8_t bank)
+{
+    switch (bank) {
+        case 0:
+        case 1:
+            return 0;
+        case 2:
+        case 3:
+            return 1;
+        case 4:
+        case 5:
+            return 2;
+        default:
+            return 3;
+    }
+}
+
+// Decrement the budget counter and block the cpu
+// when entire budget is utilized.
+void
+MemCtrl::memGuard(uint8_t cpu_id) {
+    // Decrement the budget by 1
+    uint64_t currentBudget = system()->getCoreMemBudget(cpu_id);
+    if (currentBudget > 0) {
+        system()->coreMemBudget[cpu_id]--;
+    }
+
+    uint64_t newBudget = system()->getCoreMemBudget(cpu_id);
+    if (newBudget % 1000 == 0) {
+        DPRINTF(MemGuardWatch, "budget decremented to %d\n",
+                newBudget);
+    }
+
+    // Check if exhausted (no separate flag needed)
+    if (system()->getCoreMemBudget(cpu_id) == 0) {
+        DPRINTF(MemGuardWatch, "budget exhausted\n");
+    }
+}
+
+void
+MemCtrl::memGuardBank(uint16_t bank_id) {
+    uint64_t currentBudget = system()->getBankMemBudget(bank_id);
+    if (currentBudget > 0) {
+        system()->bankMemBudget[bank_id]--;
+    }
+
+    if (system()->getBankMemBudget(bank_id) == 0) {
+        DPRINTF(MemGuardWatch, "Bank %d budget exhausted\n", bank_id);
+    }
+}
+
 bool
 MemCtrl::addToReadQueue(PacketPtr pkt,
                 unsigned int pkt_count, MemInterface* mem_intr)
@@ -257,6 +310,28 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
             MemPacket* mem_pkt;
             mem_pkt = mem_intr->decodePacket(pkt, addr, size, true,
                                                     mem_intr->pseudoChannel);
+#if 0
+
+            // original memGuard for halting the core
+            uint8_t cpu_id = getCpuid(mem_pkt->bank);
+
+            if (system()->isMemGuardEnabled() &&
+                system()->isMemGuardEnabledForCore(cpu_id) &&
+                system()->getCoreMemBudget(cpu_id) > 0) {
+                memGuard(cpu_id);
+            }
+
+#endif
+
+
+            uint16_t bank_id = mem_pkt->myBankId;
+
+            if (system()->isMemGuardEnabled() &&
+                system()->isMemGuardEnabledForBank(bank_id) &&
+                system()->getBankMemBudget(bank_id) > 0) {
+                    memGuardBank(bank_id);
+            }
+
 
             // Increment read entries of the rank (dram)
             // Increment count to trigger issue of non-deterministic read (nvm)
@@ -351,6 +426,28 @@ MemCtrl::addToWriteQueue(PacketPtr pkt, unsigned int pkt_count,
                        pkt->qosValue(), mem_pkt->addr, 1);
 
             mem_intr->writeQueueSize++;
+#if 0
+
+            // original memGuard for halting the core
+            uint8_t cpu_id = getCpuid(mem_pkt->bank);
+
+            if (system()->isMemGuardEnabled() &&
+                system()->isMemGuardEnabledForCore(cpu_id) &&
+                system()->getCoreMemBudget(cpu_id) > 0) {
+                memGuard(cpu_id);
+            }
+
+#endif
+
+
+            uint16_t bank_id = mem_pkt->myBankId;
+
+            if (system()->isMemGuardEnabled() &&
+                system()->isMemGuardEnabledForBank(bank_id) &&
+                system()->getBankMemBudget(bank_id) > 0) {
+                    memGuardBank(bank_id);
+            }
+
 
             assert(totalWriteQueueSize == isInWriteQueue.size());
 
@@ -824,11 +921,13 @@ MemCtrl::doBurstAccess(MemPacket* mem_pkt, MemInterface* mem_intr)
         stats.requestorReadTotalLat[mem_pkt->requestorId()] +=
             mem_pkt->readyTime - mem_pkt->entryTime;
         stats.requestorReadBytes[mem_pkt->requestorId()] += mem_pkt->size;
+        stats.bankReadBytes[mem_pkt->bankId] += mem_pkt->size;
     } else {
         ++(mem_intr->writesThisTime);
         stats.requestorWriteBytes[mem_pkt->requestorId()] += mem_pkt->size;
         stats.requestorWriteTotalLat[mem_pkt->requestorId()] +=
             mem_pkt->readyTime - mem_pkt->entryTime;
+        stats.bankWriteBytes[mem_pkt->bankId] += mem_pkt->size;
     }
 
     return cmd_at;
@@ -883,6 +982,30 @@ MemCtrl::processNextReqEvent(MemInterface* mem_intr,
                         EventFunctionWrapper& resp_event,
                         EventFunctionWrapper& next_req_event,
                         bool& retry_wr_req) {
+
+    // budget reset for all banks
+    if (system()->isMemGuardEnabled()) {
+        const auto num_banks = dram->banksPerRank * dram->ranksPerChannel;
+
+        for (int bank_id = 0; bank_id < num_banks; bank_id++) {
+            if (system()->isMemGuardEnabledForBank(bank_id)) {
+                if (!(system()->getCycleInitBank(bank_id)))
+                    system()->setCycleInitBank(bank_id, curCycle());
+
+                // Check if reset time has arrived (1 million cycles)
+                auto cycles_elapsed =
+                    curCycle() - system()->getCycleInitBank(bank_id);
+                if (cycles_elapsed >= 1000000) {
+                    // Reset budget - requests will automatically resume
+                    system()->resetBankMemBudget(bank_id);
+                    system()->setCycleInitBank(bank_id, curCycle());
+                    DPRINTF(MemGuardWatch, "Bank %d budget resets %llu\n",
+                            bank_id, curCycle());
+                }
+            }
+        }
+    }
+
     // transition is handled by QoS algorithm if enabled
     if (turnPolicy) {
         // select bus state - only done if QoS algorithms are in use
@@ -1271,7 +1394,23 @@ MemCtrl::CtrlStats::CtrlStats(MemCtrl &_ctrl)
              "Per-requestor read average memory access latency"),
     ADD_STAT(requestorWriteAvgLat, statistics::units::Rate<
                 statistics::units::Tick, statistics::units::Count>::get(),
-             "Per-requestor write average memory access latency")
+             "Per-requestor write average memory access latency"),
+    ADD_STAT(bankReadBytes, statistics::units::Byte::get(),
+             "Per-bank bytes read from memory"),
+    ADD_STAT(bankWriteBytes, statistics::units::Byte::get(),
+             "Per-bank bytes written to memory"),
+    ADD_STAT(bank0ReadRate, statistics::units::Rate<
+                statistics::units::Byte, statistics::units::Second>::get(),
+             "Bank 0 read bandwidth in Byte/s"),
+    ADD_STAT(bank0WriteRate, statistics::units::Rate<
+                statistics::units::Byte, statistics::units::Second>::get(),
+             "Bank 0 write bandwidth in Byte/s"),
+    ADD_STAT(bank1ReadRate, statistics::units::Rate<
+                statistics::units::Byte, statistics::units::Second>::get(),
+                "Bank 1 read bandwidth in Byte/s"),
+    ADD_STAT(bank1WriteRate, statistics::units::Rate<
+                statistics::units::Byte, statistics::units::Second>::get(),
+             "Bank 1 write bandwidth in Byte/s")
 {
 }
 
@@ -1279,6 +1418,9 @@ void
 MemCtrl::CtrlStats::regStats()
 {
     using namespace statistics;
+
+    const auto banks_per_rank = ctrl.dram->banksPerRank;
+    const auto num_banks = banks_per_rank * ctrl.dram->ranksPerChannel;
 
     assert(ctrl.system());
     const auto max_requestors = ctrl.system()->maxRequestors();
@@ -1344,6 +1486,38 @@ MemCtrl::CtrlStats::regStats()
     requestorWriteAvgLat
         .flags(nonan)
         .precision(2);
+
+    bankReadBytes
+        .init(num_banks)
+        .flags(nozero | nonan);
+
+    bankWriteBytes
+        .init(num_banks)
+        .flags(nozero | nonan);
+
+    bank0ReadRate
+        .precision(12);
+
+    bank0WriteRate
+        .precision(12);
+
+    bank1ReadRate
+        .precision(12);
+
+    bank1WriteRate
+        .precision(12);
+
+    // Add bank names/IDs as subnames
+    for (int i = 0; i < num_banks; i++) {
+        std::string bank_name = "bank_" + std::to_string(i);
+        bankReadBytes.subname(i, bank_name);
+        bankWriteBytes.subname(i, bank_name);
+    }
+
+    bank0ReadRate = bankReadBytes[0] / simSeconds;
+    bank0WriteRate = bankWriteBytes[0] / simSeconds;
+    bank1ReadRate = bankReadBytes[1] / simSeconds;
+    bank1WriteRate = bankWriteBytes[1] / simSeconds;
 
     for (int i = 0; i < max_requestors; i++) {
         const std::string requestor = ctrl.system()->getRequestorName(i);

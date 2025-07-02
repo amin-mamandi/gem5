@@ -89,6 +89,18 @@ DRAMInterface::chooseNextFRFCFS(MemPacketQueue& queue, Tick min_col_at) const
 
         // select optimal DRAM packet in Q
         if (pkt->isDram() && (pkt->pseudoChannel == pseudoChannel)) {
+
+            uint16_t bank_id = pkt->bank;
+
+            if (ctrl->system()->isMemGuardEnabled() &&
+                ctrl->system()->isMemGuardEnabledForBank(bank_id) &&
+                ctrl->system()->getBankMemBudget(bank_id) == 0) {
+                // Bank budget exhausted, skip this packet (delay it)
+                DPRINTF(DRAM, "%s bank %d budget exhausted, skipping packet\n",
+                        __func__, bank_id);
+                continue; // Skip to next packet
+            }
+
             const Bank& bank = ranks[pkt->rank]->banks[pkt->bank];
             const Tick col_allowed_at = pkt->isRead() ? bank.rdAllowedAt :
                                                         bank.wrAllowedAt;
@@ -913,8 +925,10 @@ DRAMInterface::decodePacket(const PacketPtr pkt, Addr pkt_addr,
     // later
     uint16_t bank_id = banksPerRank * rank + bank;
 
+    uint16_t my_bank_id = ranks[rank]->banks[bank].getBankId();
+
     return new MemPacket(pkt, is_read, true, pseudo_channel, rank, bank, row,
-                   bank_id, pkt_addr, size);
+                   bank_id, pkt_addr, size, my_bank_id);
 }
 
 void DRAMInterface::setupRank(const uint8_t rank, const bool is_read)

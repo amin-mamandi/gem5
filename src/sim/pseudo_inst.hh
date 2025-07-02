@@ -114,6 +114,9 @@ void m5Syscall(ThreadContext *tc);
 void togglesync(ThreadContext *tc);
 void triggerWorkloadEvent(ThreadContext *tc);
 
+void setmembudget(ThreadContext *tc, uint64_t cpu_id, uint64_t mem_budget);
+void enablememguard(ThreadContext *tc, uint64_t enable_value);
+void medusa(ThreadContext *tc, uint64_t use);
 
 /**
  * Execute a decoded M5 pseudo instruction
@@ -202,6 +205,18 @@ pseudoInstWork(ThreadContext *tc, uint8_t func, uint64_t &result)
         invokeSimcall<ABI>(tc, m5checkpoint);
         return true;
 
+      case M5OP_SETMEMBUDGET:
+        invokeSimcall<ABI>(tc, setmembudget);
+        return true;
+
+      case M5OP_ENABLEMEMGUARD:
+        invokeSimcall<ABI>(tc, enablememguard);
+        return true;
+
+      case M5OP_MEDUSA:
+        invokeSimcall<ABI>(tc, medusa);
+        return true;
+
       case M5OP_WRITE_FILE:
         result = invokeSimcall<ABI, store_ret>(tc, writefile);
         return true;
@@ -234,10 +249,10 @@ pseudoInstWork(ThreadContext *tc, uint8_t func, uint64_t &result)
         return true;
 
       case M5OP_RESERVED1:
-      case M5OP_RESERVED2:
-      case M5OP_RESERVED3:
-      case M5OP_RESERVED4:
-      case M5OP_RESERVED5:
+      // case M5OP_RESERVED2:
+      // case M5OP_RESERVED3:
+      // case M5OP_RESERVED4:
+      // case M5OP_RESERVED5:
         warn("Unimplemented m5 op (%#x)\n", func);
         return false;
 

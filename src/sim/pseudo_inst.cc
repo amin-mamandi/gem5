@@ -354,6 +354,45 @@ dumpresetstats(ThreadContext *tc, Tick delay, Tick period)
 }
 
 void
+setmembudget(ThreadContext *tc, uint64_t cpu_id, uint64_t mem_budget)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::setmembudget(%i, %i)\n",
+            cpu_id, mem_budget);
+    System *sys = tc->getSystemPtr();
+    // Ensure global memguard is enabled first
+    if (!sys->isMemGuardEnabled()) {
+        warn("Global memguard not enabled. Call enablememguard(1) first.");
+        return;
+    }
+
+    // sys->setBudgetInitCore(cpu_id, mem_budget);
+    sys->setBudgetInitBank(cpu_id, mem_budget);
+
+}
+
+void
+enablememguard(ThreadContext *tc, uint64_t enable_value)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::enablememguard(%i)\n", enable_value);
+    System *sys = tc->getSystemPtr();
+    sys->setMemGuardEnabled(enable_value != 0);
+
+    if (enable_value) {
+        DPRINTF(PseudoInst, "Global memguard enabled\n");
+    } else {
+        DPRINTF(PseudoInst, "Global memguard disabled\n");
+    }
+}
+
+void
+medusa(ThreadContext *tc, uint64_t use)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::medusa(%i)\n", use);
+    System *sys = tc->getSystemPtr();
+    sys->startTrafficGen = use;
+}
+
+void
 m5checkpoint(ThreadContext *tc, Tick delay, Tick period)
 {
     DPRINTF(PseudoInst, "pseudo_inst::m5checkpoint(%i, %i)\n", delay, period);

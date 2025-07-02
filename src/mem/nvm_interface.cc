@@ -201,7 +201,7 @@ NVMInterface::decodePacket(const PacketPtr pkt, Addr pkt_addr,
     uint16_t bank_id = banksPerRank * rank + bank;
 
     return new MemPacket(pkt, is_read, false, pseudo_channel, rank, bank, row,
-                   bank_id, pkt_addr, size);
+                   bank_id, pkt_addr, size, 0);
 }
 
 std::pair<MemPacketQueue::iterator, Tick>
