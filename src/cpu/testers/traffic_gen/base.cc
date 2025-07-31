@@ -93,12 +93,9 @@ BaseTrafficGen::BaseTrafficGen(const BaseTrafficGenParams &p)
       maxPeriod(p.max_period),
       readRatio(p.rd_ratio),
       checkSystemFlagEvent([this]{ checkSystemFlag(); }, name()),
-<<<<<<< HEAD
       trafficStarted(false)
-=======
       trafficStarted(false),
       targetBandwidth(p.target_bandwidth)
->>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
 {
 }
 
@@ -106,8 +103,6 @@ BaseTrafficGen::~BaseTrafficGen()
 {
 }
 
-<<<<<<< HEAD
-=======
 Tick
 BaseTrafficGen::calculatePeriodForBandwidth(uint64_t packet_size)
 {
@@ -125,7 +120,6 @@ BaseTrafficGen::calculatePeriodForBandwidth(uint64_t packet_size)
     return calculated_period;
 }
 
->>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
 void
 BaseTrafficGen::startup()
 {
@@ -309,7 +303,6 @@ BaseTrafficGen::update()
     } else {
         assert(curTick() >= nextPacketTick);
 
-<<<<<<< HEAD
         size_t current_outstanding = waitingResp.size();
 
         // ADAPTIVE STRATEGY: Allow bursts when system is responsive
@@ -340,9 +333,7 @@ BaseTrafficGen::update()
         }
 
         // Continue with normal packet generation...
-=======
         // get the next packet and try to send it
->>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
         PacketPtr pkt = activeGenerator->getNextPacket();
         if (pkt) {
             pkt->req->setFlags(pkt->req->getFlags() | Request::UNCACHEABLE);
@@ -367,10 +358,7 @@ BaseTrafficGen::update()
         bool passes_address_filter = true;
         if (pkt && is_memory_addr) {
             passes_address_filter = shouldFilterAddress(pkt->getAddr());
-<<<<<<< HEAD
-=======
 
->>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
         }
 
         if (pkt && is_memory_addr && passes_address_filter) {
@@ -389,15 +377,12 @@ BaseTrafficGen::update()
                 ++stats.numSuppressedByFilter;
             }
 
-<<<<<<< HEAD
             ++stats.numSuppressed;
-=======
             if (!(static_cast<int>(stats.numSuppressed.value()) % 1000000)) {
                 // warn("%s suppressed %d packets\n",
                 // name(), stats.numSuppressed.value());
             }
 
->>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
             delete pkt;
             pkt = nullptr;
         }
@@ -430,7 +415,6 @@ BaseTrafficGen::createSimpleGenerator()
         gen_id = std::stoi(id_str) - 1;
     }
 
-<<<<<<< HEAD
     Tick duration = 20000000000;      // 20 billion ticks
     Addr base_start = 0x200000000;
     Addr base_end = 0x400000000;
@@ -445,7 +429,6 @@ BaseTrafficGen::createSimpleGenerator()
     Addr block_size = 64;  // 2x larger blocks = 2x bandwidth with same count
     // Or even: Addr block_size = 256;  // 4x larger blocks = 4x bandwidth
 
-=======
     Tick duration = 50000000000;
 
     // Ensure COMPLETELY separate address ranges
@@ -465,13 +448,11 @@ BaseTrafficGen::createSimpleGenerator()
 
 
     Addr block_size = 64;
->>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
     Tick min_period = minPeriod;
     Tick max_period = maxPeriod;
     uint8_t read_percent = readRatio;
     Addr data_limit = 0;
 
-<<<<<<< HEAD
     // BANDWIDTH TRICK 2: Use DRAM generator for burst patterns
     // This generates more efficient memory access patterns
     unsigned int num_seq_pkts = 8;         // 8 sequential packets per burst
@@ -499,7 +480,6 @@ BaseTrafficGen::createSimpleGenerator()
                                     nbr_of_ranks);
         DPRINTF(TrafficGen, "DRAM generator %s: seq_pkts=%u\n",
                 name().c_str(), num_seq_pkts);
-=======
     if (gen_id == 0) {
         // DRAM generator with guaranteed non-overlapping range
         unsigned int num_seq_pkts = 16; // Number of sequential packets
@@ -537,7 +517,6 @@ BaseTrafficGen::createSimpleGenerator()
             read_percent,
             data_limit
         );
->>>>>>> 5c1d53a0ff (util: ndp accelerator working + must be used with correct diskiamge and)
     }
 }
 
