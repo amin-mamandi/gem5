@@ -48,7 +48,7 @@ class L2Cache(Cache):
         tag_latency: int = 10,
         data_latency: int = 10,
         response_latency: int = 1,
-        mshrs: int = 20,
+        mshrs: int = 144,
         tgts_per_mshr: int = 12,
         writeback_clean: bool = False,
         clusivity: Clusivity = "mostly_incl",

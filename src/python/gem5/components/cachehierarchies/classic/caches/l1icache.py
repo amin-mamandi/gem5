@@ -50,7 +50,7 @@ class L1ICache(Cache):
         tag_latency: int = 1,
         data_latency: int = 1,
         response_latency: int = 1,
-        mshrs: int = 16,
+        mshrs: int = 36,
         tgts_per_mshr: int = 20,
         writeback_clean: bool = True,
         PrefetcherCls: Type[BasePrefetcher] = StridePrefetcher,

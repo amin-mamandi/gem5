@@ -36,3 +36,8 @@ configs/dram/lowp_sweep.cfg
 .vscode
 typings
 .DS_Store
+guest-scripts
+gem5-runs
+arm-resources
+resources-qemu
+configs/example/gem5_library/riscv-fs-matrix.py

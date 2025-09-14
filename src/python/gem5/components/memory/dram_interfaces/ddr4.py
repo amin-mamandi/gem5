@@ -77,7 +77,7 @@ class DDR4_2400_16x4(DRAMInterface):
     devices_per_rank = 16
 
     # Match our DDR3 configurations which is dual rank
-    ranks_per_channel = 2
+    ranks_per_channel = 1
 
     # DDR4 has 2 (x16) or 4 (x4 and x8) bank groups
     # Set to 4 for x4 case

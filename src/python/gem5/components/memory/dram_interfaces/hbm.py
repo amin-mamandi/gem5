@@ -213,9 +213,9 @@ class HBM_2000_4H_1x64(DRAMInterface):
 
     # size of channel in bytes, 4H stack of 8Gb dies is 4GiB per stack;
     # with 16 pseudo channels, 256MiB per pseudo channel
-    device_size = "256MiB"
+    device_size = "512MiB"
 
-    device_rowbuffer_size = "1KiB"
+    device_rowbuffer_size = "2kB"
 
     # 1x128 configuration
     devices_per_rank = 1
@@ -225,57 +225,58 @@ class HBM_2000_4H_1x64(DRAMInterface):
     banks_per_rank = 16
     bank_groups_per_rank = 4
 
-    # 1000 MHz for 2Gbps DDR data rate
-    tCK = "1ns"
+    # 1.2GHz for 2.4Gbps DDR data rate
+    tCK = '0.833ns'
 
-    tRP = "14ns"
+    # use values from IDD measurement in JEDEC spec
+    # use tRP value for tRCD and tCL similar to other classes
+    tRP = '14ns'
+    tRCD = '14ns'
+    tCL = '14ns'
+    tRAS = '33ns'
 
-    tCCD_L = "3ns"
-
-    tRCD = "12ns"
-    tRCD_WR = "6ns"
-    tCL = "18ns"
-    tCWL = "7ns"
-    tRAS = "28ns"
-
-    # BL4 in pseudo channel mode
-    # DDR @ 1000 MHz means 4 * 1ns / 2 = 2ns
-    tBURST = "2ns"
-
-    # value for 2Gb device from JEDEC spec
-    tRFC = "220ns"
+    # BL2 and BL4 supported, default to BL4
+    # DDR @ 500 MHz means 4 * 2ns / 2 = 4ns
+    tBURST = '1.666ns'
+    tCCD_L = '3.332ns'
+    tCCD_L_WR = '3.332ns'
 
     # value for 2Gb device from JEDEC spec
-    tREFI = "3.9us"
+    tRFC = '160ns'
 
-    tWR = "14ns"
-    tRTP = "5ns"
-    tWTR = "4ns"
-    tWTR_L = "9ns"
-    tRTW = "18ns"
+    # value for 2Gb device from JEDEC spec
+    tREFI = '3.9us'
 
-    # tAAD from RBus
-    tAAD = "1ns"
+    # extrapolate the following from LPDDR configs, using ns values
+    # to minimize burst length, prefetch differences
+    tWR = '8ns'
+    tRTP = '3.5ns'
+    tWTR = '3ns'
+
+    # start with 2 cycles turnaround, similar to other memory classes
+    # could be more with variations across the stack
+    tRTW = '1.666ns'
 
     # single rank device, set to 0
-    tCS = "0ns"
+    tCS = '0ns'
 
-    tRRD = "4ns"
-    tRRD_L = "6ns"
+    # from MemCon example, tRRD is 4ns with 2ns tCK
+    tRRD = '1.666ns'
+    tRRD_L = '1.666ns'
 
-    # for a single pseudo channel
-    tXAW = "16ns"
+    # from MemCon example, tFAW is 30ns with 2ns tCK
+    tXAW = '12.5ns'
     activation_limit = 4
 
     # 4tCK
-    tXP = "8ns"
+    tXP = '3.332ns'
 
     # start with tRFC + tXP -> 160ns + 8ns = 168ns
-    tXS = "216ns"
+    tXS = '160ns'
 
-    page_policy = "close_adaptive"
+    page_policy = "open_adaptive"
 
-    read_buffer_size = 64
-    write_buffer_size = 64
+    read_buffer_size = 128
+    write_buffer_size = 128
 
     two_cycle_activate = True

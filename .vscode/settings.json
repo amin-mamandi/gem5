@@ -3,5 +3,6 @@
         "src/python",
         "ext",
         "tests"
-    ]
+    ],
+    "cmake.sourceDirectory": "/home/a972m888/ubuntu/home/HBM/ext/dramsys"
 }
