@@ -36,6 +36,96 @@ PySource('gem5.simulate', 'gem5/simulate/__init__.py')
 PySource('gem5.simulate', 'gem5/simulate/simulator.py')
 PySource('gem5.simulate', 'gem5/simulate/exit_event.py')
 PySource('gem5.simulate', 'gem5/simulate/exit_event_generators.py')
+
+# Commenting out all other PySource lines borrowed from a mess of benchmark repo
+# # Main modules package
+# PySource('gem5.modules', 'gem5/modules/__init__.py')
+
+# # System modules
+# PySource('gem5.modules.system', 'gem5/modules/system/__init__.py')
+# PySource('gem5.modules.system', 'gem5/modules/system/system.py')
+# PySource('gem5.modules.system', 'gem5/modules/system/system_se.py')
+
+# # Utility modules
+# PySource('gem5.modules.util', 'gem5/modules/util/__init__.py')
+# PySource('gem5.modules.util', 'gem5/modules/util/util.py')
+
+# # Ruby modules
+# PySource('gem5.modules.ruby', 'gem5/modules/ruby/__init__.py')
+# PySource('gem5.modules.ruby', 'gem5/modules/ruby/memory.py')
+
+# # Ruby network modules
+# PySource('gem5.modules.ruby.network', 'gem5/modules/ruby/network/__init__.py')
+# PySource('gem5.modules.ruby.network', 'gem5/modules/ruby/network/link.py')
+# PySource('gem5.modules.ruby.network', 'gem5/modules/ruby/network/router.py')
+
+# # Ruby topology modules
+# PySource('gem5.modules.ruby.topology', 'gem5/modules/ruby/topology/__init__.py')
+# PySource('gem5.modules.ruby.topology', 'gem5/modules/ruby/topology/Simple.py')
+
+# # Ruby topology Mesh_NOC
+# PySource('gem5.modules.ruby.topology.Mesh_NOC', 'gem5/modules/ruby/topology/Mesh_NOC/__init__.py')
+# PySource('gem5.modules.ruby.topology.Mesh_NOC', 'gem5/modules/ruby/topology/Mesh_NOC/Mesh_NOC.py')
+
+# # Ruby topology Crossbar
+# PySource('gem5.modules.ruby.topology.Crossbar', 'gem5/modules/ruby/topology/Crossbar/__init__.py')
+
+# # Ruby protocol modules
+# PySource('gem5.modules.ruby.protocol', 'gem5/modules/ruby/protocol/__init__.py')
+
+# # CHI protocol modules
+# PySource('gem5.modules.ruby.protocol.CHI', 'gem5/modules/ruby/protocol/CHI/__init__.py')
+# PySource('gem5.modules.ruby.protocol.CHI', 'gem5/modules/ruby/protocol/CHI/controllers.py')
+# PySource('gem5.modules.ruby.protocol.CHI', 'gem5/modules/ruby/protocol/CHI/network.py')
+# PySource('gem5.modules.ruby.protocol.CHI', 'gem5/modules/ruby/protocol/CHI/nodes.py')
+# PySource('gem5.modules.ruby.protocol.CHI', 'gem5/modules/ruby/protocol/CHI/system.py')
+# PySource('gem5.modules.ruby.protocol.CHI', 'gem5/modules/ruby/protocol/CHI/configure.py')
+# PySource('gem5.modules.ruby.protocol.CHI', 'gem5/modules/ruby/protocol/CHI/util.py')
+
+# # MOESI_CMP_directory protocol modules
+# PySource('gem5.modules.ruby.protocol.MOESI_CMP_directory', 'gem5/modules/ruby/protocol/MOESI_CMP_directory/__init__.py')
+# PySource('gem5.modules.ruby.protocol.MOESI_CMP_directory', 'gem5/modules/ruby/protocol/MOESI_CMP_directory/configure.py')
+
+# # Filesystem modules
+# PySource('gem5.modules.filesystem', 'gem5/modules/filesystem/__init__.py')
+# PySource('gem5.modules.filesystem', 'gem5/modules/filesystem/filesystem.py')
+
+# # Options modules
+# PySource('gem5.modules.options', 'gem5/modules/options/__init__.py')
+# PySource('gem5.modules.options', 'gem5/modules/options/options.py')
+
+# # Options protocol modules
+# PySource('gem5.modules.options.protocol', 'gem5/modules/options/protocol/__init__.py')
+# PySource('gem5.modules.options.protocol', 'gem5/modules/options/protocol/CHI.py')
+# PySource('gem5.modules.options.protocol', 'gem5/modules/options/protocol/MOESI_CMP_directory.py')
+
+# # Simulation modules
+# PySource('gem5.modules.simulation', 'gem5/modules/simulation/__init__.py')
+# PySource('gem5.modules.simulation', 'gem5/modules/simulation/simulation.py')
+
+# # Cache modules
+# PySource('gem5.modules.caches', 'gem5/modules/caches/__init__.py')
+# PySource('gem5.modules.caches', 'gem5/modules/caches/caches.py')
+# PySource('gem5.modules.caches', 'gem5/modules/caches/prefetcher.py')
+
+# # CPU modules
+# PySource('gem5.modules.cpus', 'gem5/modules/cpus/__init__.py')
+# PySource('gem5.modules.cpus', 'gem5/modules/cpus/cpus.py')
+
+# # Classic modules
+# PySource('gem5.modules.classic', 'gem5/modules/classic/__init__.py')
+
+# # Memory modules
+# PySource('gem5.modules.memory', 'gem5/modules/memory/__init__.py')
+# PySource('gem5.modules.memory', 'gem5/modules/memory/memory.py')
+# PySource('gem5.modules.memory', 'gem5/modules/memory/HBM.py')
+# PySource('gem5.modules.memory', 'gem5/modules/memory/Simple.py')
+# PySource('gem5.modules.memory', 'gem5/modules/memory/DDR4.py')
+# PySource('gem5.modules.memory', 'gem5/modules/memory/DDR5.py')
+# PySource('gem5.modules.memory', 'gem5/modules/memory/NVM.py')
+# PySource('gem5.modules.memory', 'gem5/modules/memory/HBM2.py')
+# PySource('gem5.modules.memory', 'gem5/modules/memory/HBM3.py')
+
 PySource('gem5.components', 'gem5/components/__init__.py')
 PySource('gem5.components.boards', 'gem5/components/boards/__init__.py')
 PySource('gem5.components.boards', 'gem5/components/boards/abstract_board.py')

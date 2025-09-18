@@ -43,6 +43,7 @@ Import('*')
 SimObject('CommMonitor.py', sim_objects=['CommMonitor'])
 Source('comm_monitor.cc')
 
+
 SimObject('AbstractMemory.py', sim_objects=['AbstractMemory'])
 SimObject('AddrMapper.py', sim_objects=['AddrMapper', 'RangeAddrMapper'])
 SimObject('Bridge.py', sim_objects=['Bridge'])
@@ -51,6 +52,7 @@ DebugFlag('SysBridge')
 SimObject('MemCtrl.py', sim_objects=['MemCtrl'],
         enums=['MemSched'])
 SimObject('HeteroMemCtrl.py', sim_objects=['HeteroMemCtrl'])
+SimObject('BwLatCtrl.py', sim_objects=['BwLatCtrl'])
 SimObject('HBMCtrl.py', sim_objects=['HBMCtrl'])
 SimObject('MemInterface.py', sim_objects=['MemInterface'], enums=['AddrMap'])
 SimObject('DRAMInterface.py', sim_objects=['DRAMInterface'],
@@ -69,6 +71,7 @@ SimObject('MemDelay.py', sim_objects=['MemDelay', 'SimpleMemDelay'])
 SimObject('PortTerminator.py', sim_objects=['PortTerminator'])
 SimObject('ThreadBridge.py', sim_objects=['ThreadBridge'])
 
+Source('bw_lat_ctrl.cc')
 Source('abstract_mem.cc')
 Source('addr_mapper.cc')
 Source('backdoor_manager.cc')
@@ -142,6 +145,8 @@ DebugFlag('SnoopFilter')
 CompoundFlag('XBar', ['BaseXBar', 'CoherentXBar', 'NoncoherentXBar',
                       'SnoopFilter'])
 
+DebugFlag('HeteroMemCtrl')
+DebugFlag('BwLatCtrl')
 DebugFlag('Bridge')
 DebugFlag('CommMonitor')
 DebugFlag('DRAM')

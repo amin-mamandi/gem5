@@ -153,6 +153,8 @@ class SimpleMemory : public AbstractMemory
 
     mutable Random::RandomPtr rng = Random::genRandom();
 
+  public:
+
     /**
      * Release the memory after being busy and send a retry if a
      * request was rejected in the meanwhile.
@@ -182,7 +184,6 @@ class SimpleMemory : public AbstractMemory
      */
     std::unique_ptr<Packet> pendingDelete;
 
-  public:
 
     SimpleMemory(const SimpleMemoryParams &p);
 
