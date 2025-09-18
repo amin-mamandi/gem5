@@ -38,22 +38,23 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import m5
-from gem5.modules.options import Options
 
+import gem5.modules.filesystem
+from gem5.modules.options import Options
 from gem5.modules.ruby.memory import configure_mem_region_controller
 from gem5.modules.ruby.protocol import CHI
 from gem5.modules.ruby.topology.Mesh_NOC.Mesh_NOC import Mesh_NOC
-
 from gem5.modules.util import fatal_error
-import gem5.modules.filesystem
 
 
-def configure_ruby(system, options: Options, piobus = None, dma_ports = [], bootmem=None):
+def configure_ruby(
+    system, options: Options, piobus=None, dma_ports=[], bootmem=None
+):
 
     system.ruby = m5.objects.RubySystem(
         # Set block sizes for Ruby
-        block_size_bytes = options.architecture.caches.cache_line_size,
-        memory_size_bits = 48
+        block_size_bytes=options.architecture.caches.cache_line_size,
+        memory_size_bits=48,
     )
 
     # Generate pseudo filesystem
@@ -61,36 +62,37 @@ def configure_ruby(system, options: Options, piobus = None, dma_ports = [], boot
 
     # Create the network object
     NetworkClass = dict(
-            garnet=m5.objects.GarnetNetwork,
-            simple=m5.objects.SimpleNetwork
-        ).get(options.architecture.NOC.network.model, None)
+        garnet=m5.objects.GarnetNetwork, simple=m5.objects.SimpleNetwork
+    ).get(options.architecture.NOC.network.model, None)
     if NetworkClass is None:
-        fatal_error(f"Unknown network {options.architecture.NOC.network.model}")
+        fatal_error(
+            f"Unknown network {options.architecture.NOC.network.model}"
+        )
 
     # Instantiate the network object
     # so that the controllers can connect to it.
     network = NetworkClass(
-        ruby_system = system.ruby,
-        topology  = options.architecture.NOC.topology.model,
-        routers   = [],
-        ext_links = [],
-        int_links = [],
-        netifs    = []
+        ruby_system=system.ruby,
+        topology=options.architecture.NOC.topology.model,
+        routers=[],
+        ext_links=[],
+        int_links=[],
+        netifs=[],
     )
 
     system.ruby.network = network
 
     # Instantiate network topology
-    topology = Mesh_NOC(options)    
+    topology = Mesh_NOC(options)
 
     # Create memory controllers
     (cpu_sequencers, dir_cntrls, network_nodes) = CHI.create_system(
         options,
         system,
-        dma_ports = dma_ports,
-        bootmem = bootmem,
-        router_numa_ids = topology.router_numa_ids,
-        mem_numa_ids    = topology.mem_numa_ids
+        dma_ports=dma_ports,
+        bootmem=bootmem,
+        router_numa_ids=topology.router_numa_ids,
+        mem_numa_ids=topology.mem_numa_ids,
     )
 
     # Add nodes
@@ -104,15 +106,11 @@ def configure_ruby(system, options: Options, piobus = None, dma_ports = [], boot
         topology.registerTopology(options)
 
     # Initialize network based on topology
-    CHI.init_network(
-        options,
-        system.ruby.network,
-        num_rows = topology.num_rows
-        )
+    CHI.init_network(options, system.ruby.network, num_rows=topology.num_rows)
 
     # Create a port proxy for connecting the system port. This is
     # independent of the protocol and kept in the protocol-agnostic part (i.e. here).
-    sys_port_proxy = m5.objects.RubyPortProxy(ruby_system = system.ruby)
+    sys_port_proxy = m5.objects.RubyPortProxy(ruby_system=system.ruby)
     if piobus is not None:
         sys_port_proxy.pio_request_port = piobus.cpu_side_ports
 
@@ -124,14 +122,18 @@ def configure_ruby(system, options: Options, piobus = None, dma_ports = [], boot
     # Creates memory controllers attached to a directory controller.
     # A separate controller is created for each address range
     # as the abstract memory can handle only one contiguous address range as of now.
-    system.mem_ctrls = configure_mem_region_controller(options, system, dir_cntrls)
+    system.mem_ctrls = configure_mem_region_controller(
+        options, system, dir_cntrls
+    )
 
     # Connect the cpu sequencers and the piobus
     if piobus is not None:
         for cpu_seq in cpu_sequencers:
             cpu_seq.connectIOPorts(piobus)
 
-    system.ruby.number_of_virtual_networks = system.ruby.network.number_of_virtual_networks
+    system.ruby.number_of_virtual_networks = (
+        system.ruby.network.number_of_virtual_networks
+    )
     system.ruby._cpu_ports = cpu_sequencers
     system.ruby.num_of_sequencers = len(cpu_sequencers)
 
@@ -139,14 +141,13 @@ def configure_ruby(system, options: Options, piobus = None, dma_ports = [], boot
     if options.architecture.NOC.access_backing_store:
         system.ruby.access_backing_store = True
         system.ruby.phys_mem = m5.objects.SimpleMemory(
-            range=system.mem_ranges[0],
-            in_addr_map=False
+            range=system.mem_ranges[0], in_addr_map=False
         )
 
     # Create a seperate clock domain for Ruby
     system.ruby.clk_domain = m5.objects.SrcClockDomain(
-        clock = options.architecture.NOC.clock,
-        voltage_domain = system.voltage_domain
+        clock=options.architecture.NOC.clock,
+        voltage_domain=system.voltage_domain,
     )
 
     if options.simulation.fs_mode:
@@ -154,7 +155,7 @@ def configure_ruby(system, options: Options, piobus = None, dma_ports = [], boot
         system.iobus.mem_side_ports = system.ruby._io_port.in_ports
 
         # Tie the cpu ports to the correct ruby system ports
-        for (i, cpu) in enumerate(system.cpu):
+        for i, cpu in enumerate(system.cpu):
             cpu.clk_domain = system.cpu_clk_domain
             cpu.createThreads()
             cpu.createInterruptController()
@@ -162,8 +163,8 @@ def configure_ruby(system, options: Options, piobus = None, dma_ports = [], boot
             system.ruby._cpu_ports[i].connectCpuPorts(cpu)
     else:
         # Tie the cpu ports to the correct ruby system ports
-        for (i, cpu) in enumerate(system.cpu):
-            #cpu.clk_domain = system.cpu_clk_domain
-            #cpu.createThreads()
+        for i, cpu in enumerate(system.cpu):
+            # cpu.clk_domain = system.cpu_clk_domain
+            # cpu.createThreads()
             cpu.createInterruptController()
             system.ruby._cpu_ports[i].connectCpuPorts(cpu)

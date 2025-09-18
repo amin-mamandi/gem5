@@ -1,10 +1,11 @@
-import m5
-import os, sys
+import os
+import sys
 
-from gem5.modules.system import System
+import m5
+
 from gem5.modules.options import Options
 from gem5.modules.simulation import Simulation
-
+from gem5.modules.system import System
 
 options = Options()
 
@@ -14,7 +15,9 @@ if options.disable_listeners:
 
 init_system = System(options)
 
-root = m5.objects.Root(system=init_system, full_system=options.simulation.fs_mode) 
+root = m5.objects.Root(
+    system=init_system, full_system=options.simulation.fs_mode
+)
 
 if options.simulation.fs_mode:
     if options.simulation.timesync:
@@ -22,13 +25,16 @@ if options.simulation.fs_mode:
 
     if not options.bare_metal and not options.dtb_filename:
         if options.architecture.system.model not in [
-                                    "VExpress_GEM5",
-                                    "VExpress_GEM5_V1",
-                                    "VExpress_GEM5_V2",
-                                    "VExpress_GEM5_Foundation"]:
+            "VExpress_GEM5",
+            "VExpress_GEM5_V1",
+            "VExpress_GEM5_V2",
+            "VExpress_GEM5_Foundation",
+        ]:
             print("Can only correctly generate a dtb for VExpress_GEM5")
             sys.exit(1)
-        root.system.workload.dtb_filename = os.path.join(m5.options.outdir, '%s.dtb' % "system")
+        root.system.workload.dtb_filename = os.path.join(
+            m5.options.outdir, "%s.dtb" % "system"
+        )
         root.system.generateDtb(root.system.workload.dtb_filename)
 
 

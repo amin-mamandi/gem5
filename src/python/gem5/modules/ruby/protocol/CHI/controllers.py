@@ -1,14 +1,18 @@
-import m5
 import math
+
+import m5
 
 from gem5.modules.options import CacheOptions
 
+
 class Versions:
-    '''
+    """
     Helper class to obtain unique ids for a given controller class.
     These are passed as the 'version' parameter when creating the controller.
-    '''
+    """
+
     _seqs = 0
+
     @classmethod
     def getSeqId(cls):
         val = cls._seqs
@@ -16,6 +20,7 @@ class Versions:
         return val
 
     _version = {}
+
     @classmethod
     def getVersion(cls, tp):
         if tp not in cls._version:
@@ -24,14 +29,17 @@ class Versions:
         cls._version[tp] = val + 1
         return val
 
+
 class TriggerMessageBuffer(m5.objects.MessageBuffer):
-    '''
+    """
     MessageBuffer for triggering internal controller events.
     These buffers should not be affected by the Ruby tester randomization
     and allow poping messages enqueued in the same cycle.
-    '''
-    randomization = 'disabled'
+    """
+
+    randomization = "disabled"
     allow_zero_latency = True
+
 
 class OrderedTriggerMessageBuffer(TriggerMessageBuffer):
     ordered = True
@@ -39,87 +47,91 @@ class OrderedTriggerMessageBuffer(TriggerMessageBuffer):
 
 class CacheMemory(m5.objects.RubyCache):
     def __init__(self, options: CacheOptions, **kwargs):
-        super(CacheMemory, self).__init__(
-            dataAccessLatency = options.latencies.data,
-            tagAccessLatency  = options.latencies.tag,
-            size  = options.size,
-            assoc = options.assoc,
-            is_icache = options.is_icache,
+        super().__init__(
+            dataAccessLatency=options.latencies.data,
+            tagAccessLatency=options.latencies.tag,
+            size=options.size,
+            assoc=options.assoc,
+            is_icache=options.is_icache,
             **kwargs
         )
+
 
 class Sequencer(m5.objects.RubySequencer):
     def __init__(self, ruby_system, **kwargs):
-        super(Sequencer, self).__init__(
-            version = Versions.getSeqId(),
-            ruby_system = ruby_system,
-            **kwargs
+        super().__init__(
+            version=Versions.getSeqId(), ruby_system=ruby_system, **kwargs
         )
 
+
 class DBC_CHI_Cache_Controller(m5.objects.Cache_Controller):
-    '''
+    """
     Default parameters for a Cache controller
     The Cache_Controller can also be used as a DMA requester or as
     a pure directory if all cache allocation policies are disabled.
-    '''
+    """
 
     def __init__(self, ruby_system):
-        super(DBC_CHI_Cache_Controller, self).__init__(
-            version = Versions.getVersion(m5.objects.Cache_Controller),
-            ruby_system = ruby_system,
-            mandatoryQueue = m5.objects.MessageBuffer(),
-            prefetchQueue = m5.objects.MessageBuffer(),
-            triggerQueue = TriggerMessageBuffer(),
-            retryTriggerQueue = OrderedTriggerMessageBuffer(),
-            replTriggerQueue  = OrderedTriggerMessageBuffer(),
-            reqRdy = TriggerMessageBuffer(),
-            snpRdy =TriggerMessageBuffer()
+        super().__init__(
+            version=Versions.getVersion(m5.objects.Cache_Controller),
+            ruby_system=ruby_system,
+            mandatoryQueue=m5.objects.MessageBuffer(),
+            prefetchQueue=m5.objects.MessageBuffer(),
+            triggerQueue=TriggerMessageBuffer(),
+            retryTriggerQueue=OrderedTriggerMessageBuffer(),
+            replTriggerQueue=OrderedTriggerMessageBuffer(),
+            reqRdy=TriggerMessageBuffer(),
+            snpRdy=TriggerMessageBuffer(),
         )
         # Set somewhat large number since we really a lot on internal
         # triggers. To limit the controller performance, tweak other
         # params such as: input port buffer size, cache banks, and output
         # port latency
-        self.transitions_per_cycle = 1024 
+        self.transitions_per_cycle = 1024
         # This should be set to true in the data cache controller to enable
         # timeouts on unique lines when a store conditional fails
         self.sc_lock_enabled = False
 
 
-
 class DBC_CHI_Memory_Controller(m5.objects.Memory_Controller):
-    '''
+    """
     Default parameters for a Memory controller
-    '''
+    """
 
     def __init__(self, ruby_system):
-        super(DBC_CHI_Memory_Controller, self).__init__(
-                          version = Versions.getVersion(m5.objects.Memory_Controller),
-                          ruby_system = ruby_system,
-                          triggerQueue = TriggerMessageBuffer(),
-                          responseFromMemory = m5.objects.MessageBuffer(),
-                          requestToMemory = m5.objects.MessageBuffer(ordered = True),
-                          reqRdy = TriggerMessageBuffer()
-                          )
-
+        super().__init__(
+            version=Versions.getVersion(m5.objects.Memory_Controller),
+            ruby_system=ruby_system,
+            triggerQueue=TriggerMessageBuffer(),
+            responseFromMemory=m5.objects.MessageBuffer(),
+            requestToMemory=m5.objects.MessageBuffer(ordered=True),
+            reqRdy=TriggerMessageBuffer(),
+        )
 
         self._cntrl = m5.objects.Memory_Controller
 
 
 class DBC_CHI_L1Controller(DBC_CHI_Cache_Controller):
-    '''
+    """
     Default parameters for a L1 Cache controller
-    '''
+    """
 
-    def __init__(self, ruby_system, sequencer, options: CacheOptions, prefetcher=m5.objects.NULL):
-        super(DBC_CHI_L1Controller, self).__init__(ruby_system)
+    def __init__(
+        self,
+        ruby_system,
+        sequencer,
+        options: CacheOptions,
+        prefetcher=m5.objects.NULL,
+    ):
+        super().__init__(ruby_system)
 
         cache_line_size = ruby_system.block_size_bytes.value
         block_size_bits = int(math.log(cache_line_size, 2))
 
-        self.cache     = CacheMemory(options, start_index_bit = block_size_bits)
+        self.cache = CacheMemory(options, start_index_bit=block_size_bits)
         self.sequencer = sequencer
 
-        self.use_prefetcher = prefetcher != m5.objects.NULL 
+        self.use_prefetcher = prefetcher != m5.objects.NULL
         self.prefetcher = prefetcher
 
         self.is_HN = False
@@ -133,7 +145,9 @@ class DBC_CHI_L1Controller(DBC_CHI_Cache_Controller):
         # self.alloc_on_seq_acc_load  = options.controller.alloc_on_seq_acc_load
         # self.alloc_on_seq_acc_store = options.controller.alloc_on_seq_acc_store
         # Allocate if CHIRequestType = StoreLine
-        self.alloc_on_seq_line_write = options.controller.alloc_on_seq_line_write
+        self.alloc_on_seq_line_write = (
+            options.controller.alloc_on_seq_line_write
+        )
         # Allocate if CHIRequestType = ReadShared, ReadNotSharedDirty
         self.alloc_on_readshared = options.controller.alloc_on_readshared
         # Allocate if CHIRequestType = ReadUnique
@@ -151,27 +165,30 @@ class DBC_CHI_L1Controller(DBC_CHI_Cache_Controller):
         self.dealloc_backinv_unique = options.controller.dealloc_backinv_unique
         self.dealloc_backinv_shared = options.controller.dealloc_backinv_shared
         # Some reasonable default TBE params
-        self.number_of_TBEs       = options.controller.number_of_TBEs
-        self.number_of_repl_TBEs  = options.controller.number_of_repl_TBEs
+        self.number_of_TBEs = options.controller.number_of_TBEs
+        self.number_of_repl_TBEs = options.controller.number_of_repl_TBEs
         self.number_of_snoop_TBEs = options.controller.number_of_snoop_TBEs
         # DVM
         self.number_of_DVM_TBEs = 16
         self.number_of_DVM_snoop_TBEs = 4
 
-        self.unify_repl_TBEs      = options.controller.unify_repl_TBEs
+        self.unify_repl_TBEs = options.controller.unify_repl_TBEs
+
 
 class DBC_CHI_L2Controller(DBC_CHI_Cache_Controller):
-    '''
+    """
     Default parameters for a L2 Cache controller
-    '''
+    """
 
-    def __init__(self, ruby_system, options: CacheOptions, prefetcher=m5.objects.NULL):
-        super(DBC_CHI_L2Controller, self).__init__(ruby_system)
+    def __init__(
+        self, ruby_system, options: CacheOptions, prefetcher=m5.objects.NULL
+    ):
+        super().__init__(ruby_system)
 
         cache_line_size = ruby_system.block_size_bytes.value
         block_size_bits = int(math.log(cache_line_size, 2))
 
-        self.cache = CacheMemory(options, start_index_bit = block_size_bits)
+        self.cache = CacheMemory(options, start_index_bit=block_size_bits)
         self.sequencer = m5.objects.NULL
 
         # self.use_prefetcher = False
@@ -181,86 +198,99 @@ class DBC_CHI_L2Controller(DBC_CHI_Cache_Controller):
         self.send_evictions = False
         self.enable_DMT = False
         self.enable_DCT = False
-        self.allow_SD   = options.controller.allow_SD
+        self.allow_SD = options.controller.allow_SD
         # Strict inclusive MOESI
         # self.alloc_on_seq_acc_load   = options.controller.alloc_on_seq_acc_load
         # self.alloc_on_seq_acc_store  = options.controller.alloc_on_seq_acc_store
-        self.alloc_on_seq_line_write = options.controller.alloc_on_seq_line_write
-        self.alloc_on_readshared     = options.controller.alloc_on_readshared
-        self.alloc_on_readunique     = options.controller.alloc_on_readunique
-        self.alloc_on_readonce       = options.controller.alloc_on_readonce
-        self.alloc_on_writeback      = options.controller.alloc_on_writeback
-        self.dealloc_on_unique       = options.controller.dealloc_on_unique
-        self.dealloc_on_shared       = options.controller.dealloc_on_shared
-        self.dealloc_backinv_unique  = options.controller.dealloc_backinv_unique
-        self.dealloc_backinv_shared  = options.controller.dealloc_backinv_shared
+        self.alloc_on_seq_line_write = (
+            options.controller.alloc_on_seq_line_write
+        )
+        self.alloc_on_readshared = options.controller.alloc_on_readshared
+        self.alloc_on_readunique = options.controller.alloc_on_readunique
+        self.alloc_on_readonce = options.controller.alloc_on_readonce
+        self.alloc_on_writeback = options.controller.alloc_on_writeback
+        self.dealloc_on_unique = options.controller.dealloc_on_unique
+        self.dealloc_on_shared = options.controller.dealloc_on_shared
+        self.dealloc_backinv_unique = options.controller.dealloc_backinv_unique
+        self.dealloc_backinv_shared = options.controller.dealloc_backinv_shared
         # Some reasonable default TBE params
-        self.number_of_TBEs       = options.controller.number_of_TBEs
-        self.number_of_repl_TBEs  = options.controller.number_of_repl_TBEs
+        self.number_of_TBEs = options.controller.number_of_TBEs
+        self.number_of_repl_TBEs = options.controller.number_of_repl_TBEs
         self.number_of_snoop_TBEs = options.controller.number_of_snoop_TBEs
-        self.number_of_DVM_TBEs = 1 # should not receive any dvm
-        self.number_of_DVM_snoop_TBEs = 1 # should not receive any dvm
-        self.unify_repl_TBEs      = options.controller.unify_repl_TBEs
+        self.number_of_DVM_TBEs = 1  # should not receive any dvm
+        self.number_of_DVM_snoop_TBEs = 1  # should not receive any dvm
+        self.unify_repl_TBEs = options.controller.unify_repl_TBEs
 
 
 class DBC_CHI_HNFController(DBC_CHI_Cache_Controller):
-    '''
+    """
     Default parameters for a coherent home node (HNF) cache controller
-    '''
+    """
 
-    def __init__(self, ruby_system, addr_ranges, options: CacheOptions, prefetcher=m5.objects.NULL):
-        super(DBC_CHI_HNFController, self).__init__(ruby_system)
+    def __init__(
+        self,
+        ruby_system,
+        addr_ranges,
+        options: CacheOptions,
+        prefetcher=m5.objects.NULL,
+    ):
+        super().__init__(ruby_system)
 
         cache_line_size = ruby_system.block_size_bytes.value
         block_size_bits = int(math.log(cache_line_size, 2))
 
-        self.cache = CacheMemory(options, start_index_bit = block_size_bits)
+        self.cache = CacheMemory(options, start_index_bit=block_size_bits)
         self.sequencer = m5.objects.NULL
 
         self.use_prefetcher = prefetcher != m5.objects.NULL
         self.prefetcher = prefetcher
- 
+
         self.addr_ranges = addr_ranges
         self.is_HN = True
         self.send_evictions = False
         self.enable_DMT = options.controller.enable_DMT
         self.enable_DCT = options.controller.enable_DCT
-        self.allow_SD   = options.controller.allow_SD
+        self.allow_SD = options.controller.allow_SD
         # MOESI / Mostly inclusive for shared / Exclusive for unique
         # self.alloc_on_seq_acc_load   = options.controller.alloc_on_seq_acc_load
         # self.alloc_on_seq_acc_store  = options.controller.alloc_on_seq_acc_store
-        self.alloc_on_seq_line_write = options.controller.alloc_on_seq_line_write
-        self.alloc_on_readshared     = options.controller.alloc_on_readshared
-        self.alloc_on_readunique     = options.controller.alloc_on_readunique
-        self.alloc_on_readonce       = options.controller.alloc_on_readonce
-        self.alloc_on_writeback      = options.controller.alloc_on_writeback
-        self.dealloc_on_unique       = options.controller.dealloc_on_unique
-        self.dealloc_on_shared       = options.controller.dealloc_on_shared
-        self.dealloc_backinv_unique  = options.controller.dealloc_backinv_unique
-        self.dealloc_backinv_shared  = options.controller.dealloc_backinv_shared
+        self.alloc_on_seq_line_write = (
+            options.controller.alloc_on_seq_line_write
+        )
+        self.alloc_on_readshared = options.controller.alloc_on_readshared
+        self.alloc_on_readunique = options.controller.alloc_on_readunique
+        self.alloc_on_readonce = options.controller.alloc_on_readonce
+        self.alloc_on_writeback = options.controller.alloc_on_writeback
+        self.dealloc_on_unique = options.controller.dealloc_on_unique
+        self.dealloc_on_shared = options.controller.dealloc_on_shared
+        self.dealloc_backinv_unique = options.controller.dealloc_backinv_unique
+        self.dealloc_backinv_shared = options.controller.dealloc_backinv_shared
         # Some reasonable default TBE params
-        self.number_of_TBEs       = options.controller.number_of_TBEs
-        self.number_of_repl_TBEs  = options.controller.number_of_repl_TBEs
+        self.number_of_TBEs = options.controller.number_of_TBEs
+        self.number_of_repl_TBEs = options.controller.number_of_repl_TBEs
         self.number_of_snoop_TBEs = options.controller.number_of_snoop_TBEs
-        self.number_of_DVM_TBEs = 1 # should not receive any dvm
-        self.number_of_DVM_snoop_TBEs = 1 # should not receive any dvm
-        self.unify_repl_TBEs      = options.controller.unify_repl_TBEs
+        self.number_of_DVM_TBEs = 1  # should not receive any dvm
+        self.number_of_DVM_snoop_TBEs = 1  # should not receive any dvm
+        self.unify_repl_TBEs = options.controller.unify_repl_TBEs
+
 
 class DBC_CHI_MNController(m5.objects.MiscNode_Controller):
-    '''
+    """
     Default parameters for a Misc Node
-    '''
+    """
 
-    def __init__(self, ruby_system, addr_range, l1d_caches, early_nonsync_comp):
-        super(DBC_CHI_MNController, self).__init__(
-            version = Versions.getVersion(m5.objects.MiscNode_Controller),
-            ruby_system = ruby_system,
-            mandatoryQueue = m5.objects.MessageBuffer(),
-            triggerQueue = TriggerMessageBuffer(),
-            retryTriggerQueue = TriggerMessageBuffer(),
-            schedRspTriggerQueue = TriggerMessageBuffer(),
-            reqRdy = TriggerMessageBuffer(),
-            snpRdy = TriggerMessageBuffer(),
+    def __init__(
+        self, ruby_system, addr_range, l1d_caches, early_nonsync_comp
+    ):
+        super().__init__(
+            version=Versions.getVersion(m5.objects.MiscNode_Controller),
+            ruby_system=ruby_system,
+            mandatoryQueue=m5.objects.MessageBuffer(),
+            triggerQueue=TriggerMessageBuffer(),
+            retryTriggerQueue=TriggerMessageBuffer(),
+            schedRspTriggerQueue=TriggerMessageBuffer(),
+            reqRdy=TriggerMessageBuffer(),
+            snpRdy=TriggerMessageBuffer(),
         )
         # Set somewhat large number since we really a lot on internal
         # triggers. To limit the controller performance, tweak other
@@ -276,19 +306,22 @@ class DBC_CHI_MNController(m5.objects.MiscNode_Controller):
         # "upstream_destinations" = targets for DVM snoops
         self.upstream_destinations = l1d_caches
 
+
 class DBC_CHI_DMAController(DBC_CHI_Cache_Controller):
-    '''
+    """
     Default parameters for a DMA controller
-    '''
+    """
 
     def __init__(self, ruby_system, sequencer):
-        super(DBC_CHI_DMAController, self).__init__(ruby_system)
+        super().__init__(ruby_system)
         self.sequencer = sequencer
+
         class DummyCache(m5.objects.RubyCache):
             dataAccessLatency = 0
             tagAccessLatency = 1
             size = "128"
             assoc = 1
+
         self.use_prefetcher = False
         self.prefetcher = m5.objects.NULL
         self.cache = DummyCache()
@@ -313,7 +346,7 @@ class DBC_CHI_DMAController(DBC_CHI_Cache_Controller):
         self.send_evictions = False
         self.number_of_TBEs = 16
         self.number_of_repl_TBEs = 1
-        self.number_of_snoop_TBEs = 1 # should not receive any snoop
-        self.number_of_DVM_TBEs = 1 # should not receive any dvm
-        self.number_of_DVM_snoop_TBEs = 1 # should not receive any dvm
+        self.number_of_snoop_TBEs = 1  # should not receive any snoop
+        self.number_of_DVM_TBEs = 1  # should not receive any dvm
+        self.number_of_DVM_snoop_TBEs = 1  # should not receive any dvm
         self.unify_repl_TBEs = False

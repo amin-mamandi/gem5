@@ -44,9 +44,10 @@
 #          Matthias Jung
 #          Erfan Azarkhish
 
+import m5
+
 from gem5.modules import util
 
-import m5
 
 # A single HBM x128 interface (one command and address bus), with
 # default timings based on data publically released
@@ -69,9 +70,9 @@ class HBM_1000_4H_1x128(m5.objects.DRAMInterface):
 
     # size of channel in bytes, 4H stack of 2Gb dies is 1GB per stack;
     # with 8 channels, 128MB per channel
-    device_size = '128MB'
+    device_size = "128MB"
 
-    device_rowbuffer_size = '2kB'
+    device_rowbuffer_size = "2kB"
 
     # 1x128 configuration
     devices_per_rank = 1
@@ -91,53 +92,52 @@ class HBM_1000_4H_1x128(m5.objects.DRAMInterface):
     bank_groups_per_rank = 0
 
     # 500 MHz for 1Gbps DDR data rate
-    tCK = '2ns'
+    tCK = "2ns"
 
     # use values from IDD measurement in JEDEC spec
     # use tRP value for tRCD and tCL similar to other classes
-    tRP = '15ns'
-    tRCD = '15ns'
-    tCL = '15ns'
-    tRAS = '33ns'
+    tRP = "15ns"
+    tRCD = "15ns"
+    tCL = "15ns"
+    tRAS = "33ns"
 
     # BL2 and BL4 supported, default to BL4
     # DDR @ 500 MHz means 4 * 2ns / 2 = 4ns
-    tBURST = '4ns'
+    tBURST = "4ns"
 
     # value for 2Gb device from JEDEC spec
-    tRFC = '160ns'
+    tRFC = "160ns"
 
     # value for 2Gb device from JEDEC spec
-    tREFI = '3.9us'
+    tREFI = "3.9us"
 
     # extrapolate the following from LPDDR configs, using ns values
     # to minimize burst length, prefetch differences
-    tWR = '18ns'
-    tRTP = '7.5ns'
-    tWTR = '10ns'
+    tWR = "18ns"
+    tRTP = "7.5ns"
+    tWTR = "10ns"
 
     # start with 2 cycles turnaround, similar to other memory classes
     # could be more with variations across the stack
-    tRTW = '4ns'
+    tRTW = "4ns"
 
     # single rank device, set to 0
-    tCS = '0ns'
+    tCS = "0ns"
 
     # from MemCon example, tRRD is 4ns with 2ns tCK
-    tRRD = '4ns'
+    tRRD = "4ns"
 
     # from MemCon example, tFAW is 30ns with 2ns tCK
-    tXAW = '30ns'
+    tXAW = "30ns"
     activation_limit = 4
 
     # 4tCK
-    tXP = '8ns'
+    tXP = "8ns"
 
     # start with tRFC + tXP -> 160ns + 8ns = 168ns
-    tXS = '168ns'
+    tXS = "168ns"
 
 
 class HBM(HBM_1000_4H_1x128):
     def __init__(self, options, **kwargs):
-        super(HBM, self).__init__(**kwargs)
-        
+        super().__init__(**kwargs)

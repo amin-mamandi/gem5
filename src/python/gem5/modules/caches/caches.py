@@ -36,7 +36,12 @@
 
 import m5
 
-from gem5.modules.caches.prefetcher import Stride, Tagged, AMPM
+from gem5.modules.caches.prefetcher import (
+    AMPM,
+    Stride,
+    Tagged,
+)
+
 
 class IOCache(m5.objects.Cache):
     assoc = 8
@@ -44,44 +49,48 @@ class IOCache(m5.objects.Cache):
     data_latency = 50
     response_latency = 50
     mshrs = 20
-    size = '1kB'
+    size = "1kB"
     tgts_per_mshr = 12
+
 
 # The following lines were copied from file devices.py
 # provided by BSC (and adjusted by FORTH to match A76)
 
+
 class L1I(m5.objects.Cache):
     def __init__(self, parameters, **kwargs):
-        super(L1I, self).__init__(**kwargs)
-        self.tag_latency      = parameters['latency']['tag']
-        self.data_latency     = parameters['latency']['data']
-        self.response_latency = parameters['latency']['response']
-        self.size             = parameters['size']
+        super().__init__(**kwargs)
+        self.tag_latency = parameters["latency"]["tag"]
+        self.data_latency = parameters["latency"]["data"]
+        self.response_latency = parameters["latency"]["response"]
+        self.size = parameters["size"]
         self.is_read_only = True
         self.writeback_clean = True
         self.mshrs = 8
         self.tgts_per_mshr = 8
-        self.assoc = parameters['assoc']
+        self.assoc = parameters["assoc"]
+
 
 class L1D(m5.objects.Cache):
     def __init__(self, parameters, **kwargs):
-        super(L1D, self).__init__(**kwargs)
-        self.tag_latency      = parameters['latency']['tag']
-        self.data_latency     = parameters['latency']['data']
-        self.response_latency = parameters['latency']['response']
-        self.size             = parameters['size']
-        self.assoc            = parameters['assoc']
-        self.mshrs            = parameters['mshrs']
-        self.tgts_per_mshr    = parameters['tgts_per_mshr']
-        self.write_buffers    = parameters['write_buffers']
-        
+        super().__init__(**kwargs)
+        self.tag_latency = parameters["latency"]["tag"]
+        self.data_latency = parameters["latency"]["data"]
+        self.response_latency = parameters["latency"]["response"]
+        self.size = parameters["size"]
+        self.assoc = parameters["assoc"]
+        self.mshrs = parameters["mshrs"]
+        self.tgts_per_mshr = parameters["tgts_per_mshr"]
+        self.write_buffers = parameters["write_buffers"]
+
+
 class WalkCache(m5.objects.Cache):
     def __init__(self, parameters, **kwargs):
-        super(WalkCache, self).__init__(**kwargs)
-        self.tag_latency      = parameters['latency']['tag']
-        self.data_latency     = parameters['latency']['data']
-        self.response_latency = parameters['latency']['response']
-        self.size             = parameters['size']
+        super().__init__(**kwargs)
+        self.tag_latency = parameters["latency"]["tag"]
+        self.data_latency = parameters["latency"]["data"]
+        self.response_latency = parameters["latency"]["response"]
+        self.size = parameters["size"]
         self.is_read_only = True
         self.writeback_clean = True
         self.mshrs = 6
@@ -92,37 +101,45 @@ class WalkCache(m5.objects.Cache):
 
 class L2(m5.objects.Cache):
     def __init__(self, parameters, **kwargs):
-        super(L2, self).__init__(**kwargs)
-        self.tag_latency      = parameters['latency']['tag']
-        self.data_latency     = parameters['latency']['data']
-        self.response_latency = parameters['latency']['response']
-        self.size             = parameters['size']        
-        self.mshrs            = parameters['mshrs']
-        self.tgts_per_mshr    = parameters['tgts_per_mshr']
-        self.write_buffers    = parameters['write_buffers']
-        self.assoc            = parameters['assoc']
-        self.clusivity        = parameters['clusivity']
-        self.prefetch_on_access = parameters['prefetcher']['selected'] != "None"
+        super().__init__(**kwargs)
+        self.tag_latency = parameters["latency"]["tag"]
+        self.data_latency = parameters["latency"]["data"]
+        self.response_latency = parameters["latency"]["response"]
+        self.size = parameters["size"]
+        self.mshrs = parameters["mshrs"]
+        self.tgts_per_mshr = parameters["tgts_per_mshr"]
+        self.write_buffers = parameters["write_buffers"]
+        self.assoc = parameters["assoc"]
+        self.clusivity = parameters["clusivity"]
+        self.prefetch_on_access = (
+            parameters["prefetcher"]["selected"] != "None"
+        )
 
-        if (parameters['prefetcher']['selected'] == "Stride"):
-            self.prefetcher = Stride(parameters['prefetcher']['configuration']['Stride'])
+        if parameters["prefetcher"]["selected"] == "Stride":
+            self.prefetcher = Stride(
+                parameters["prefetcher"]["configuration"]["Stride"]
+            )
 
-        if (parameters['prefetcher']['selected'] == "Tagged"):
-            self.prefetcher = Tagged(parameters['prefetcher']['configuration']['Tagged'])
+        if parameters["prefetcher"]["selected"] == "Tagged":
+            self.prefetcher = Tagged(
+                parameters["prefetcher"]["configuration"]["Tagged"]
+            )
 
-        if (parameters['prefetcher']['selected'] == "AMPM"):
-            self.prefetcher = AMPM(parameters['prefetcher']['configuration']['AMPM'])
+        if parameters["prefetcher"]["selected"] == "AMPM":
+            self.prefetcher = AMPM(
+                parameters["prefetcher"]["configuration"]["AMPM"]
+            )
 
 
 class L3Slice(m5.objects.Cache):
     def __init__(self, parameters, **kwargs):
-        super(L3Slice, self).__init__(**kwargs)
-        self.tag_latency      = parameters['latency']['tag']
-        self.data_latency     = parameters['latency']['data']
-        self.response_latency = parameters['latency']['response']
-        self.size             = parameters['size']
-        self.assoc            = parameters['assoc']
-        self.mshrs            = parameters['mshrs']
-        self.tgts_per_mshr    = parameters['tgts_per_mshr']
-        self.write_buffers    = parameters['write_buffers']
-        self.clusivity        = parameters['clusivity']
+        super().__init__(**kwargs)
+        self.tag_latency = parameters["latency"]["tag"]
+        self.data_latency = parameters["latency"]["data"]
+        self.response_latency = parameters["latency"]["response"]
+        self.size = parameters["size"]
+        self.assoc = parameters["assoc"]
+        self.mshrs = parameters["mshrs"]
+        self.tgts_per_mshr = parameters["tgts_per_mshr"]
+        self.write_buffers = parameters["write_buffers"]
+        self.clusivity = parameters["clusivity"]

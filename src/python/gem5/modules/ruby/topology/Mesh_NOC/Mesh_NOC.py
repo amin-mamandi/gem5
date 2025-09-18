@@ -37,33 +37,36 @@
 import math
 
 import m5
-from m5.util import fatal
-from m5.params import *
-from m5.objects import *
-
 from m5.defines import buildEnv
+from m5.objects import *
+from m5.params import *
+from m5.util import fatal
 
 from gem5.modules.options import Options
-
-from gem5.modules.ruby.topology import SimpleTopology
+from gem5.modules.ruby.network import (
+    create_ext_link,
+    create_int_link,
+)
 from gem5.modules.ruby.protocol import CHI
-
-from gem5.modules.ruby.network import create_int_link, create_ext_link
+from gem5.modules.ruby.topology import SimpleTopology
 from gem5.modules.util import fatal_error
 
+
 class Mesh_NOC(SimpleTopology):
-    description = 'Mesh_NOC'
+    description = "Mesh_NOC"
 
     def __init__(self, options: Options, nodes: list = []):
 
         self.nodes = nodes
 
-        self.router_latency  = options.architecture.NOC.topology.router_latency
+        self.router_latency = options.architecture.NOC.topology.router_latency
         self.num_rows = options.architecture.NOC.topology.parameters["dim"][0]
         self.num_cols = options.architecture.NOC.topology.parameters["dim"][1]
         self.num_mesh_routers = self.num_rows * self.num_cols
 
-        self.numa_ids = options.architecture.NOC.topology.parameters.get("numa", dict())
+        self.numa_ids = options.architecture.NOC.topology.parameters.get(
+            "numa", dict()
+        )
 
         self.router_numa_ids = [0] * self.num_mesh_routers
 
@@ -72,24 +75,32 @@ class Mesh_NOC(SimpleTopology):
                 if router_id in router_ids:
                     self.router_numa_ids[router_id] = id
                     break
-        
+
         self.num_mem_regions = len(options.architecture.memory.regions)
         self.mem_numa_ids = [0] * self.num_mem_regions
-        
+
         for region_id in range(self.num_mem_regions):
             # NUMA ID is defined to be the ID of the first router
             # in the corresponding SNF_Mem router list
-            self.mem_numa_ids[region_id] = self.router_numa_ids[options.architecture.NOC.protocol.nodes["SNF_Mem"].router_list[region_id][0]]
+            self.mem_numa_ids[region_id] = self.router_numa_ids[
+                options.architecture.NOC.protocol.nodes["SNF_Mem"].router_list[
+                    region_id
+                ][0]
+            ]
 
         # Set the router classes based on the command line options
         RouterClass = dict(
-                garnet=m5.objects.GarnetRouter,
-                simple=m5.objects.Switch
-            ).get(options.architecture.NOC.network.model, None)
+            garnet=m5.objects.GarnetRouter, simple=m5.objects.Switch
+        ).get(options.architecture.NOC.network.model, None)
         if RouterClass is None:
-            fatal_error(f"Unknown network {options.architecture.NOC.network.model}")
+            fatal_error(
+                f"Unknown network {options.architecture.NOC.network.model}"
+            )
 
-        self._routers = [RouterClass(router_id=i, latency = self.router_latency) for i in range(self.num_mesh_routers)]
+        self._routers = [
+            RouterClass(router_id=i, latency=self.router_latency)
+            for i in range(self.num_mesh_routers)
+        ]
 
         self._link_count = 0
         self._int_links = []
@@ -109,93 +120,97 @@ class Mesh_NOC(SimpleTopology):
         # East output to West input links
         for row in range(self.num_rows):
             for col in range(self.num_cols):
-                if (col + 1 < self.num_cols):
+                if col + 1 < self.num_cols:
                     src = col + (row * self.num_cols)
                     dst = (col + 1) + (row * self.num_cols)
 
                     for supported_vnets in mesh_lvs:
                         int_links_len = len(self._int_links)
-                        #print(f"EW link: R{src}.L{int_links_len}.R{dst} {supported_vnets}")
+                        # print(f"EW link: R{src}.L{int_links_len}.R{dst} {supported_vnets}")
 
                         self._int_links.append(
-                                create_int_link(
-                                    options,
-                                    link_id  = self._link_count,
-                                    src_node = self._routers[src],
-                                    dst_node = self._routers[dst],
-                                    dst_inport = dst_inport[0],
-                                    weight     = link_weights[0],
-                                    vnet_support = supported_vnets
-                                    ))
+                            create_int_link(
+                                options,
+                                link_id=self._link_count,
+                                src_node=self._routers[src],
+                                dst_node=self._routers[dst],
+                                dst_inport=dst_inport[0],
+                                weight=link_weights[0],
+                                vnet_support=supported_vnets,
+                            )
+                        )
                         self._link_count += 1
 
         # West output to East input links
         for row in range(self.num_rows):
             for col in range(self.num_cols):
-                if (col + 1 < self.num_cols):
+                if col + 1 < self.num_cols:
                     src = (col + 1) + (row * self.num_cols)
                     dst = col + (row * self.num_cols)
 
                     for supported_vnets in mesh_lvs:
                         int_links_len = len(self._int_links)
-                    #print(f"WE link: R{src}.L{int_links_len}.R{dst} {supported_vnets}")
+                        # print(f"WE link: R{src}.L{int_links_len}.R{dst} {supported_vnets}")
 
                         self._int_links.append(
-                                create_int_link(
-                                    options,
-                                    link_id  = self._link_count,
-                                    src_node = self._routers[src],
-                                    dst_node = self._routers[dst],
-                                    dst_inport = dst_inport[1],
-                                    weight     = link_weights[1],
-                                    vnet_support = supported_vnets
-                                    ))
+                            create_int_link(
+                                options,
+                                link_id=self._link_count,
+                                src_node=self._routers[src],
+                                dst_node=self._routers[dst],
+                                dst_inport=dst_inport[1],
+                                weight=link_weights[1],
+                                vnet_support=supported_vnets,
+                            )
+                        )
                         self._link_count += 1
 
         # North output to South input links
         for col in range(self.num_cols):
             for row in range(self.num_rows):
-                if (row + 1 < self.num_rows):
+                if row + 1 < self.num_rows:
                     src = col + (row * self.num_cols)
                     dst = col + ((row + 1) * self.num_cols)
 
                     for supported_vnets in mesh_lvs:
                         int_links_len = len(self._int_links)
-                        #print(f"NS link: R{src}.L{int_links_len}.R{dst} {supported_vnets}")
+                        # print(f"NS link: R{src}.L{int_links_len}.R{dst} {supported_vnets}")
 
                         self._int_links.append(
-                                create_int_link(
-                                    options,
-                                    link_id  = self._link_count,
-                                    src_node = self._routers[src],
-                                    dst_node = self._routers[dst],
-                                    dst_inport = dst_inport[2],
-                                    weight     = link_weights[2],
-                                    vnet_support = supported_vnets
-                                    ))
+                            create_int_link(
+                                options,
+                                link_id=self._link_count,
+                                src_node=self._routers[src],
+                                dst_node=self._routers[dst],
+                                dst_inport=dst_inport[2],
+                                weight=link_weights[2],
+                                vnet_support=supported_vnets,
+                            )
+                        )
                         self._link_count += 1
 
         # South output to North input links
         for col in range(self.num_cols):
             for row in range(self.num_rows):
-                if (row + 1 < self.num_rows):
+                if row + 1 < self.num_rows:
                     src = col + ((row + 1) * self.num_cols)
                     dst = col + (row * self.num_cols)
 
                     for supported_vnets in mesh_lvs:
                         int_links_len = len(self._int_links)
-                        #print(f"SN link: R{src}.L{int_links_len}.R{dst} {supported_vnets}")
+                        # print(f"SN link: R{src}.L{int_links_len}.R{dst} {supported_vnets}")
 
                         self._int_links.append(
-                                create_int_link(
-                                    options,
-                                    link_id  = self._link_count,
-                                    src_node = self._routers[src],
-                                    dst_node = self._routers[dst],
-                                    dst_inport = dst_inport[3],
-                                    weight     = link_weights[3],
-                                    vnet_support = supported_vnets
-                                ))
+                            create_int_link(
+                                options,
+                                link_id=self._link_count,
+                                src_node=self._routers[src],
+                                dst_node=self._routers[dst],
+                                dst_inport=dst_inport[3],
+                                weight=link_weights[3],
+                                vnet_support=supported_vnets,
+                            )
+                        )
                         self._link_count += 1
 
         # dirs = [0,1,2,3]
@@ -222,71 +237,75 @@ class Mesh_NOC(SimpleTopology):
         #                         )
         #                     self._link_count += 1
 
-
     def _createRNFRouter(self, options: Options, mesh_router):
         # Create a zero-latency router bridging node controllers and the mesh router
 
-        cbar_lvs       = options.architecture.NOC.network.cbar_vnet_support
-        link_latency   = options.architecture.NOC.topology.cbar_link_latency
+        cbar_lvs = options.architecture.NOC.network.cbar_vnet_support
+        link_latency = options.architecture.NOC.topology.cbar_link_latency
         router_latency = options.architecture.NOC.topology.cbar_router_latency
 
         router_id = len(self._routers)
 
         # Set the network classes based on the command line options
         if options.architecture.NOC.network.model == "garnet":
-            RouterClass  = m5.objects.GarnetRouter
+            RouterClass = m5.objects.GarnetRouter
         elif options.architecture.NOC.network.model == "simple":
-            RouterClass  = m5.objects.Switch
+            RouterClass = m5.objects.Switch
         else:
-            fatal_error(f"Unknown network {options.architecture.NOC.network.model}")
+            fatal_error(
+                f"Unknown network {options.architecture.NOC.network.model}"
+            )
 
         # Set bus latency to zero
-        node_router = RouterClass(
-            router_id = router_id,
-            latency = router_latency
-            )
+        node_router = RouterClass(router_id=router_id, latency=router_latency)
 
         self._routers.append(node_router)
 
         for supported_vnets in cbar_lvs:
             int_links_len = len(self._int_links)
-            #print(f"RN link: R{node_router.router_id}.L{int_links_len}.R{mesh_router.router_id}")
+            # print(f"RN link: R{node_router.router_id}.L{int_links_len}.R{mesh_router.router_id}")
 
             # connect node_router <-> mesh router
             self._int_links.append(
                 create_int_link(
                     options,
-                    link_id = self._link_count,
-                    src_node = node_router,
-                    dst_node = mesh_router,
-                    latency = link_latency,
-                    vnet_support=supported_vnets
-                    ))
+                    link_id=self._link_count,
+                    src_node=node_router,
+                    dst_node=mesh_router,
+                    latency=link_latency,
+                    vnet_support=supported_vnets,
+                )
+            )
             self._link_count += 1
 
             int_links_len = len(self._int_links)
-            #print(f"RN link: R{mesh_router.router_id}.L{int_links_len}.R{node_router.router_id}")
+            # print(f"RN link: R{mesh_router.router_id}.L{int_links_len}.R{node_router.router_id}")
 
             self._int_links.append(
                 create_int_link(
                     options,
-                    link_id = self._link_count,
-                    src_node = mesh_router,
-                    dst_node = node_router,
-                    latency = link_latency,
-                    vnet_support=supported_vnets
-                    ))
+                    link_id=self._link_count,
+                    src_node=mesh_router,
+                    dst_node=node_router,
+                    latency=link_latency,
+                    vnet_support=supported_vnets,
+                )
+            )
             self._link_count += 1
 
         return node_router
 
     def distributeNodes(self, options: Options, node_list, node_name: str):
 
-        num_nodes_per_router = options.architecture.NOC.protocol.nodes[node_name].nodes_per_router
-        router_idx_list      = options.architecture.NOC.protocol.nodes[node_name].router_list
-        mesh_lvs             = options.architecture.NOC.network.mesh_vnet_support
-        mesh_link_latency    = options.architecture.NOC.topology.node_link_latency
-        rnf_single_router    = options.architecture.NOC.protocol.rnf_single_router
+        num_nodes_per_router = options.architecture.NOC.protocol.nodes[
+            node_name
+        ].nodes_per_router
+        router_idx_list = options.architecture.NOC.protocol.nodes[
+            node_name
+        ].router_list
+        mesh_lvs = options.architecture.NOC.network.mesh_vnet_support
+        mesh_link_latency = options.architecture.NOC.topology.node_link_latency
+        rnf_single_router = options.architecture.NOC.protocol.rnf_single_router
 
         if num_nodes_per_router:
             # evenly distribute nodes to all listed routers
@@ -294,10 +313,14 @@ class Mesh_NOC(SimpleTopology):
         else:
             # try to circulate all nodes to all routers, some routers may be
             # connected to zero or more than one node.
-            router_idx = lambda idx: idx  % len(router_idx_list)
+            router_idx = lambda idx: idx % len(router_idx_list)
 
         for idx, node in enumerate(node_list):
-            mesh_router_idx = node._router_id if node._router_id is not None else router_idx_list[router_idx(idx)]
+            mesh_router_idx = (
+                node._router_id
+                if node._router_id is not None
+                else router_idx_list[router_idx(idx)]
+            )
             router = self._routers[mesh_router_idx]
 
             # Create another router bridging RNF node controllers and the mesh router
@@ -308,28 +331,29 @@ class Mesh_NOC(SimpleTopology):
             ctrls = node.getNetworkSideControllers()
             for i, c in enumerate(ctrls):
                 for supported_vnets in mesh_lvs:
-                    #print("EXT link: EXT.{}.{}.{}.L{}.R{} {}".format(node.__class__.__name__, i, c.__class__.__name__, self._link_count, router.router_id, supported_vnets))
+                    # print("EXT link: EXT.{}.{}.{}.L{}.R{} {}".format(node.__class__.__name__, i, c.__class__.__name__, self._link_count, router.router_id, supported_vnets))
                     self._ext_links.append(
                         create_ext_link(
                             options,
-                            link_id = self._link_count,
-                            ext_node = c,
-                            int_node = router,
-                            latency = mesh_link_latency,
-                            vnet_support=supported_vnets
-                        ))
+                            link_id=self._link_count,
+                            ext_node=c,
+                            int_node=router,
+                            latency=mesh_link_latency,
+                            vnet_support=supported_vnets,
+                        )
+                    )
                     self._link_count += 1
 
     def makeTopology(self, options: Options, network):
-        assert(buildEnv['PROTOCOL'] == 'CHI')
+        assert buildEnv["PROTOCOL"] == "CHI"
 
         # classify nodes into different types
         mesh_nodes = dict(
-            RNF = [],
-            HNF = [],
-            SNF_Mem = [],
-            SNF_IO = [],
-            RNI_IO = [],
+            RNF=[],
+            HNF=[],
+            SNF_Mem=[],
+            SNF_IO=[],
+            RNI_IO=[],
         )
 
         for n in self.nodes:
@@ -346,7 +370,11 @@ class Mesh_NOC(SimpleTopology):
             elif isinstance(n, CHI.CHI_RNI_IO):
                 mesh_nodes["RNI_IO"].append(n)
             else:
-                fatal('topologies.Mesh_NOC: {} not supported'.format(n.__class__.__name__))
+                fatal(
+                    "topologies.Mesh_NOC: {} not supported".format(
+                        n.__class__.__name__
+                    )
+                )
 
         # Place nodes on the mesh
         for label, nodes in mesh_nodes.items():
@@ -359,56 +387,66 @@ class Mesh_NOC(SimpleTopology):
 
         pairing = options.architecture.NOC.protocol.pairing
         if pairing != None:
-            self._autoPairHNFandSNF(mesh_nodes["HNF"], mesh_nodes["SNF_Mem"], pairing)
+            self._autoPairHNFandSNF(
+                mesh_nodes["HNF"], mesh_nodes["SNF_Mem"], pairing
+            )
 
     def _autoPairHNFandSNF(self, cache_ctrls, mem_ctrls, pairing):
         # Use the pairing defined by the configuration to reassign the
         # memory ranges
-        pair_debug = False 
+        pair_debug = False
         all_cache = []
-        for c in cache_ctrls: all_cache.extend(c.getNetworkSideControllers())
+        for c in cache_ctrls:
+            all_cache.extend(c.getNetworkSideControllers())
         all_mem = []
-        for c in mem_ctrls: all_mem.extend(c.getNetworkSideControllers())
+        for c in mem_ctrls:
+            all_mem.extend(c.getNetworkSideControllers())
 
         # checks and maps index from pairing map to component
-        assert(len(pairing) == len(all_cache))
+        assert len(pairing) == len(all_cache)
 
-        def _tolist(val): return val if isinstance(val, list) else [val]
+        def _tolist(val):
+            return val if isinstance(val, list) else [val]
 
-        for m in all_mem: m._pairing = []
+        for m in all_mem:
+            m._pairing = []
 
         pairing_check = max(1, len(all_mem) / len(all_cache))
-        for cidx,c in enumerate(all_cache):
+        for cidx, c in enumerate(all_cache):
             c._pairing = []
             for midx in _tolist(pairing[cidx]):
                 c._pairing.append(all_mem[midx])
                 if c not in all_mem[midx]._pairing:
                     all_mem[midx]._pairing.append(c)
-            assert(len(c._pairing) == pairing_check)
+            assert len(c._pairing) == pairing_check
             if pair_debug:
                 print(c.path())
                 for r in c.addr_ranges:
                     print("%s" % r)
                 for p in c._pairing:
-                    print("\t"+p.path())
+                    print("\t" + p.path())
                     for r in p.addr_ranges:
                         print("\t%s" % r)
 
         # all must be paired
-        for c in all_cache: assert(len(c._pairing) > 0)
-        for m in all_mem: assert(len(m._pairing) > 0)
+        for c in all_cache:
+            assert len(c._pairing) > 0
+        for m in all_mem:
+            assert len(m._pairing) > 0
 
         # only support a single range for the main memory controllers
         tgt_range_start = all_mem[0].addr_ranges[0].start.value
         for mem in all_mem:
             for r in mem.addr_ranges:
                 if r.start.value != tgt_range_start:
-                    fatal('topologies.CustomMesh: not supporting pairing of '\
-                          'main memory with multiple ranges')
+                    fatal(
+                        "topologies.CustomMesh: not supporting pairing of "
+                        "main memory with multiple ranges"
+                    )
 
         # reassign ranges for a 1 -> N paring
         def _rerange(src_cntrls, tgt_cntrls, fix_tgt_peer):
-            assert(len(tgt_cntrls) >= len(src_cntrls))
+            assert len(tgt_cntrls) >= len(src_cntrls)
 
             def _rangeToBit(addr_ranges):
                 bit = None
@@ -416,14 +454,14 @@ class Mesh_NOC(SimpleTopology):
                     if bit == None:
                         bit = r.intlvMatch
                     else:
-                        assert(bit == r.intlvMatch)
+                        assert bit == r.intlvMatch
                 return bit
 
             def _getPeer(cntrl):
                 return cntrl.memory_out_port.peer.simobj
 
             sorted_src = list(src_cntrls)
-            sorted_src.sort(key = lambda x: _rangeToBit(x.addr_ranges))
+            sorted_src.sort(key=lambda x: _rangeToBit(x.addr_ranges))
 
             # paired controllers need to have seq. interleaving match values
             intlvMatch = 0
@@ -443,17 +481,16 @@ class Mesh_NOC(SimpleTopology):
                     new_src_mask = []
                     for m in src_range.masks:
                         # TODO should mask all the way to the max range size
-                        new_src_mask.append(m | (m*2) | (m*4) |
-                                                  (m*8) | (m*16))
+                        new_src_mask.append(
+                            m | (m * 2) | (m * 4) | (m * 8) | (m * 16)
+                        )
                     for tgt in src._pairing:
                         paired = False
                         for tgt_range in tgt.addr_ranges:
-                            if tgt_range.start.value == \
-                               src_range.start.value:
+                            if tgt_range.start.value == src_range.start.value:
                                 src_range.masks = new_src_mask
                                 new_tgt_mask = []
-                                lsbs = len(tgt_range.masks) - \
-                                       len(new_src_mask)
+                                lsbs = len(tgt_range.masks) - len(new_src_mask)
                                 for i in range(lsbs):
                                     new_tgt_mask.append(tgt_range.masks[i])
                                 for m in new_src_mask:
@@ -463,9 +500,13 @@ class Mesh_NOC(SimpleTopology):
                                     _getPeer(tgt).range.masks = new_tgt_mask
                                 paired = True
                         if not paired:
-                            fatal('topologies.CustomMesh: could not ' \
-                                    'reassign ranges {} {}'.format(
-                                    src.path(), tgt.path()))
+                            fatal(
+                                "topologies.CustomMesh: could not "
+                                "reassign ranges {} {}".format(
+                                    src.path(), tgt.path()
+                                )
+                            )
+
         if len(all_mem) >= len(all_cache):
             _rerange(all_cache, all_mem, True)
         else:
@@ -473,14 +514,12 @@ class Mesh_NOC(SimpleTopology):
 
         if pair_debug:
             print("")
-            for cidx,c in enumerate(all_cache):
-                assert(len(c._pairing) == pairing_check)
+            for cidx, c in enumerate(all_cache):
+                assert len(c._pairing) == pairing_check
                 print(c.path())
                 for r in c.addr_ranges:
                     print("%s" % r)
                 for p in c._pairing:
-                    print("\t"+p.path())
+                    print("\t" + p.path())
                     for r in p.addr_ranges:
                         print("\t%s" % r)
-
-

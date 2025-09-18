@@ -42,13 +42,21 @@
 # Authors: Ali Saidi
 #          Brad Beckmann
 
-import sys, os
-from math import log, ceil
+import os
+import sys
+from math import (
+    ceil,
+    log,
+)
 
 import m5
 
+from gem5.modules import (
+    classic,
+    ruby,
+)
 from gem5.modules.options import Options
-from gem5.modules import classic, ruby
+
 
 def create_cow_image(name):
     """Helper function to create a Copy-on-Write disk image"""
@@ -57,12 +65,13 @@ def create_cow_image(name):
 
     return image
 
+
 def attach_9p(parent, bus):
     viopci = m5.objects.PciVirtIO()
     viopci.vio = m5.objects.VirtIO9PDiod()
-    viodir = os.path.join(m5.options.outdir, '9p')
-    viopci.vio.root = os.path.join(viodir, 'share')
-    viopci.vio.socketPath = os.path.join(viodir, 'socket')
+    viodir = os.path.join(m5.options.outdir, "9p")
+    viopci.vio.root = os.path.join(viodir, "share")
+    viopci.vio.socketPath = os.path.join(viodir, "socket")
     if not os.path.exists(viopci.vio.root):
         os.makedirs(viopci.vio.root)
     if os.path.exists(viopci.vio.socketPath):
@@ -75,36 +84,39 @@ class MemBus(m5.objects.SystemXBar):
     badaddr_responder = m5.objects.BadAddr()
     default = m5.objects.Self.badaddr_responder.pio
 
+
 class FileDiskImage(m5.objects.CowDiskImage):
     def __init__(self, child_image_file, **kwargs):
-        super(FileDiskImage, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.child.image_file = child_image_file
+
 
 class CowIdeDisk(m5.objects.IdeDisk):
     def __init__(self, child_image_file, **kwargs):
-        super(CowIdeDisk, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.image = FileDiskImage(child_image_file)
+
 
 class EPISystem(m5.objects.ArmSystem):
     def __init__(self, options, **kwargs):
         # type: (Options, **str) -> None
 
-        super(EPISystem, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
-        options = options # type: Options
+        options = options  # type: Options
 
-        self.sve_vl = int(options.architecture.cpu.sve_length)/128
+        self.sve_vl = int(options.architecture.cpu.sve_length) / 128
 
         self.mem_mode = options.architecture.cpu.init_class.memory_mode()
 
         # Ruby only supports atomic accesses in noncaching mode
         if f"{self.mem_mode}" == "atomic" and options.architecture.NOC.active:
-            self.mem_mode = 'atomic_noncaching'
+            self.mem_mode = "atomic_noncaching"
 
         self.iobus = m5.objects.IOXBar()
 
         if not options.architecture.NOC.active:
-            self.bridge = m5.objects.Bridge(delay='50ns')
+            self.bridge = m5.objects.Bridge(delay="50ns")
             self.bridge.mem_side_port = self.iobus.cpu_side_ports
             self.membus = MemBus()
             self.membus.badaddr_responder.warn_access = "warn"
@@ -112,7 +124,7 @@ class EPISystem(m5.objects.ArmSystem):
 
         platform_class = dict(
             VExpress_GEM5_V1=m5.objects.VExpress_GEM5_V1,
-            VExpress_GEM5_V2=m5.objects.VExpress_GEM5_V2
+            VExpress_GEM5_V2=m5.objects.VExpress_GEM5_V2,
         ).get(options.architecture.system.model, None)
 
         self.realview = platform_class()
@@ -129,7 +141,7 @@ class EPISystem(m5.objects.ArmSystem):
 
         self.attach_disk_images(options)
 
-        self.terminal  = m5.objects.Terminal()
+        self.terminal = m5.objects.Terminal()
         self.vncserver = m5.objects.VncServer()
 
         if options.vio_9p:
@@ -149,9 +161,21 @@ class EPISystem(m5.objects.ArmSystem):
         self.create_cpus(options)
 
         if options.architecture.NOC.active:
-            ruby.configure_ruby(self, options, piobus = self.iobus, dma_ports=self._dma_ports, bootmem=self._bootmem)
+            ruby.configure_ruby(
+                self,
+                options,
+                piobus=self.iobus,
+                dma_ports=self._dma_ports,
+                bootmem=self._bootmem,
+            )
         else:
-            classic.configure_classic(self, options, piobus = self.iobus, dma_ports=self._dma_ports, bootmem=self._bootmem)
+            classic.configure_classic(
+                self,
+                options,
+                piobus=self.iobus,
+                dma_ports=self._dma_ports,
+                bootmem=self._bootmem,
+            )
 
     def create_memory_ranges_VExpress_GEM5(self, options):
         # Assume VExpress_GEM5_Base platform
@@ -162,14 +186,14 @@ class EPISystem(m5.objects.ArmSystem):
         for region in options.architecture.memory.regions:
             print(region)
             sizes = []
-            # [lnghrdntcr] For HMEM systems, the size variable is a list that holds 
-            # the sizes 
-            # This will fail in the creation of the ArmSystem: 
+            # [lnghrdntcr] For HMEM systems, the size variable is a list that holds
+            # the sizes
+            # This will fail in the creation of the ArmSystem:
             # The number of mem_ranges should equal the number of numa nodes
-            if type(region.size) == list: 
-                for s in region.size: 
+            if type(region.size) == list:
+                for s in region.size:
                     sizes.append(int(m5.objects.Addr(s)))
-            else: 
+            else:
                 sizes.append(int(m5.objects.Addr(region.size)))
 
             size = sum(sizes)
@@ -187,16 +211,22 @@ class EPISystem(m5.objects.ArmSystem):
             self.workload = m5.objects.ArmFsWorkload(dtb_addr=0)
         else:
             workload = m5.objects.ArmFsLinux()
-            workload.dtb_filename  = options.dtb_filename
-            workload.machine_type = machine_type if machine_type in m5.objects.ArmMachineType.map else "DTOnly"
+            workload.dtb_filename = options.dtb_filename
+            workload.machine_type = (
+                machine_type
+                if machine_type in m5.objects.ArmMachineType.map
+                else "DTOnly"
+            )
 
-            if hasattr(self.realview.gic, 'cpu_addr'):
+            if hasattr(self.realview.gic, "cpu_addr"):
                 self.gic_cpu_addr = self.realview.gic.cpu_addr
 
             # set cmdline
             cmdline = None
             if options.command_line and options.command_line_file:
-                print("Error: --command-line and --command-line-file are mutually exclusive")
+                print(
+                    "Error: --command-line and --command-line-file are mutually exclusive"
+                )
                 sys.exit(1)
             if options.command_line:
                 cmdline = options.command_line
@@ -209,11 +239,13 @@ class EPISystem(m5.objects.ArmSystem):
             workload.command_line = cmdline
 
             self.workload = workload
-            self.realview.setupBootLoader(self, lambda name:  options.bootloader )
+            self.realview.setupBootLoader(
+                self, lambda name: options.bootloader
+            )
 
         self.workload.object_file = options.kernel
         self.readfile = options.bootscript
-        
+
         # Parameter available in simulation with m5 initparam
         # self.init_param = init_param
 
@@ -222,7 +254,7 @@ class EPISystem(m5.objects.ArmSystem):
             # I/O traffic enters iobus
             self.external_io = m5.objects.ExternalMaster(
                 port_data="external_io",
-                port_type=options.memory.external_memory_system
+                port_type=options.memory.external_memory_system,
             )
             self.external_io.port = self.iobus.cpu_side_ports
 
@@ -230,7 +262,7 @@ class EPISystem(m5.objects.ArmSystem):
             self.iocache = m5.objects.ExternalSlave(
                 port_data="iocache",
                 port_type=options.memory.external_memory_system,
-                addr_ranges=self.mem_ranges
+                addr_ranges=self.mem_ranges,
             )
             self.iocache.port = self.iobus.mem_side_ports
 
@@ -242,9 +274,13 @@ class EPISystem(m5.objects.ArmSystem):
             self.realview.attachIO(self.iobus)
 
         elif options.architecture.NOC.active:
-            self._dma_ports = [ ]
-            self._mem_ports = [ ]
-            self.realview.attachOnChipIO(self.iobus, dma_ports=self._dma_ports, mem_ports=self._mem_ports)
+            self._dma_ports = []
+            self._mem_ports = []
+            self.realview.attachOnChipIO(
+                self.iobus,
+                dma_ports=self._dma_ports,
+                mem_ports=self._mem_ports,
+            )
             self.realview.attachIO(self.iobus, dma_ports=self._dma_ports)
         else:
             self.realview.attachOnChipIO(self.membus, self.bridge)
@@ -259,21 +295,31 @@ class EPISystem(m5.objects.ArmSystem):
         # pci_devices.append(self.pci_ide)
 
         # Setup VirtIO disk images
-        disks = [ FileDiskImage(f) for f in options.disk ]
+        disks = [FileDiskImage(f) for f in options.disk]
 
-        self.pci_vio_block = [ m5.objects.PciVirtIO(vio=m5.objects.VirtIOBlock(image=img))
-                              for img in disks ]
+        self.pci_vio_block = [
+            m5.objects.PciVirtIO(vio=m5.objects.VirtIOBlock(image=img))
+            for img in disks
+        ]
 
         for dev in self.pci_vio_block:
             pci_devices.append(dev)
 
         for dev in pci_devices:
-            self.realview.attachPciDevice(dev, self.iobus, dma_ports=self._dma_ports if options.architecture.NOC.active else None)
+            self.realview.attachPciDevice(
+                dev,
+                self.iobus,
+                dma_ports=(
+                    self._dma_ports
+                    if options.architecture.NOC.active
+                    else None
+                ),
+            )
 
     def configure_system_clocks(self, options):
         # Create a top-level voltage domain
         self.voltage_domain = m5.objects.VoltageDomain(
-            voltage = options.architecture.system.voltage
+            voltage=options.architecture.system.voltage
         )
         # Create a CPU voltage domain
         self.cpu_voltage_domain = m5.objects.VoltageDomain()
@@ -281,13 +327,13 @@ class EPISystem(m5.objects.ArmSystem):
         # Create a source clock for the system and set the clock period
         self.clk_domain = m5.objects.SrcClockDomain(
             clock=options.architecture.system.clock,
-            voltage_domain=self.voltage_domain
+            voltage_domain=self.voltage_domain,
         )
 
         # Create a source clock for the CPUs and set the clock period
         self.cpu_clk_domain = m5.objects.SrcClockDomain(
             clock=options.architecture.cpu.clock,
-            voltage_domain=self.cpu_voltage_domain
+            voltage_domain=self.cpu_voltage_domain,
         )
 
     def create_cpus(self, options):
@@ -296,6 +342,7 @@ class EPISystem(m5.objects.ArmSystem):
             options.architecture.cpu.init_class(
                 options.architecture.cpu,
                 clk_domain=self.cpu_clk_domain,
-                cpu_id=i
-            ) for i in range(options.architecture.num_cpus)
+                cpu_id=i,
+            )
+            for i in range(options.architecture.num_cpus)
         ]

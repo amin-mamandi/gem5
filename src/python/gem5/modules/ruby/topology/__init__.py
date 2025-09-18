@@ -5,7 +5,9 @@ from gem5.modules.ruby.topology.Simple import SimpleTopology
 
 def create_topology(network_nodes, network_cntrls, options):
     topology_name = options.architecture.NOC.topology.model
-    Topo = importlib.import_module(f"gem5.modules.ruby.topology.{topology_name}")
+    Topo = importlib.import_module(
+        f"gem5.modules.ruby.topology.{topology_name}"
+    )
     topology = Topo.create_topology(network_nodes, network_cntrls, options)
 
     return topology

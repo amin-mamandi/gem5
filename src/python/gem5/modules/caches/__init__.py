@@ -1,20 +1,26 @@
-
-from gem5.modules.caches.caches import IOCache
-from gem5.modules.caches.caches import L1I, L1D, WalkCache, L2, L3Slice
-
-from gem5.modules.caches.prefetcher import Stride
-from gem5.modules.caches.prefetcher import Tagged
-from gem5.modules.caches.prefetcher import IndirectMemory
-from gem5.modules.caches.prefetcher import SignaturePath
-from gem5.modules.caches.prefetcher import SignaturePath2
-from gem5.modules.caches.prefetcher import AMPM
-from gem5.modules.caches.prefetcher import DCPT
-from gem5.modules.caches.prefetcher import IrregularStreamBuffer
-from gem5.modules.caches.prefetcher import SlimAMPM
-from gem5.modules.caches.prefetcher import BOP
-from gem5.modules.caches.prefetcher import SBOOE
-from gem5.modules.caches.prefetcher import STeMS
-from gem5.modules.caches.prefetcher import PIF
+from gem5.modules.caches.caches import (
+    L1D,
+    L1I,
+    L2,
+    IOCache,
+    L3Slice,
+    WalkCache,
+)
+from gem5.modules.caches.prefetcher import (
+    AMPM,
+    BOP,
+    DCPT,
+    PIF,
+    SBOOE,
+    IndirectMemory,
+    IrregularStreamBuffer,
+    SignaturePath,
+    SignaturePath2,
+    SlimAMPM,
+    STeMS,
+    Stride,
+    Tagged,
+)
 
 
 def get_prefetcher(options):
@@ -32,7 +38,8 @@ def get_prefetcher(options):
             BOP=BOP,
             SBOOE=SBOOE,
             STeMS=STeMS,
-            PIF=PIF
+            PIF=PIF,
         ).get(name, None)
+
     pf_cls = get_prefetcher_class(options.selected)
     return pf_cls(parameters=options.configuration)

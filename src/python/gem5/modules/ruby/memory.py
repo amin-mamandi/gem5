@@ -36,28 +36,46 @@
 # Authors: Andreas Sandberg
 #          Andreas Hansson
 
-import m5
 import math
 
-from gem5.modules.memory import HBM, HBM2, DDR4, Simple
-# [lnghrdntcr] Imported DDR5, HBM3 
-from gem5.modules.memory import DDR5, HBM3
-# [lnghrdntcr] Imported NVMInterface
-from gem5.modules.memory import NVM
+import m5
 
-def create_memory_interface(options, model, range, index, intlv_size, intlv_bits, mem_options=None, hetero_mem_id=0, just_range=False):
+# [lnghrdntcr] Imported NVMInterface
+# [lnghrdntcr] Imported DDR5, HBM3
+from gem5.modules.memory import (
+    DDR4,
+    DDR5,
+    HBM,
+    HBM2,
+    HBM3,
+    NVM,
+    Simple,
+)
+
+
+def create_memory_interface(
+    options,
+    model,
+    range,
+    index,
+    intlv_size,
+    intlv_bits,
+    mem_options=None,
+    hetero_mem_id=0,
+    just_range=False,
+):
 
     access_backing_store = options.architecture.NOC.access_backing_store
-    xor_low_bit          = options.architecture.NOC.xor_low_bit
+    xor_low_bit = options.architecture.NOC.xor_low_bit
 
     memory_cls = dict(
-        HBM  = HBM,
-        HBM2 = HBM2,
-        HBM3 = HBM3,
-        DDR4 = DDR4,
-        DDR5 = DDR5,
-        NVM  = NVM,
-        Simple = Simple
+        HBM=HBM,
+        HBM2=HBM2,
+        HBM3=HBM3,
+        DDR4=DDR4,
+        DDR5=DDR5,
+        NVM=NVM,
+        Simple=Simple,
     ).get(model, DDR5)
 
     # Use basic hashing for the channel selection, and preferably use
@@ -65,7 +83,7 @@ def create_memory_interface(options, model, range, index, intlv_size, intlv_bits
     # the details of the caches here, make an educated guess. 4 MByte
     # 4-way associative with 64 byte cache lines is 6 offset bits and
     # 14 index bits.
-    if (xor_low_bit):
+    if xor_low_bit:
         xor_high_bit = xor_low_bit + intlv_bits - 1
     else:
         xor_high_bit = 0
@@ -74,31 +92,32 @@ def create_memory_interface(options, model, range, index, intlv_size, intlv_bits
     # mapping and row-buffer size
     # interface = memory_cls(options)
 
-    if mem_options is not None and mem_options.get("addr_mapping") is not None: 
+    if mem_options is not None and mem_options.get("addr_mapping") is not None:
         assert mem_options.get("page_policy") is not None
-        page_policy  = mem_options["page_policy"]
-        addr_mapping = mem_options["addr_mapping"] 
+        page_policy = mem_options["page_policy"]
+        addr_mapping = mem_options["addr_mapping"]
 
-        if isinstance(page_policy, list): 
+        if isinstance(page_policy, list):
             # HeteroMemCtrl
-            page_policy  = page_policy[hetero_mem_id]
+            page_policy = page_policy[hetero_mem_id]
             addr_mapping = addr_mapping[hetero_mem_id]
 
-
-        interface = memory_cls(options, addr_mapping=addr_mapping, page_policy=page_policy)
-    elif not just_range: 
+        interface = memory_cls(
+            options, addr_mapping=addr_mapping, page_policy=page_policy
+        )
+    elif not just_range:
         interface = memory_cls(options)
 
     # Set default intlv_low_bit value
     intlv_low_bit = int(math.log(intlv_size, 2))
-    if just_range: 
+    if just_range:
         return m5.objects.AddrRange(
             range.start,
-            size = range.size(),
-            intlvHighBit = intlv_low_bit + intlv_bits - 1,
-            xorHighBit   = xor_high_bit,
-            intlvBits    = intlv_bits,
-            intlvMatch   = index
+            size=range.size(),
+            intlvHighBit=intlv_low_bit + intlv_bits - 1,
+            xorHighBit=xor_high_bit,
+            intlvBits=intlv_bits,
+            intlvMatch=index,
         )
 
     # Only do this for DRAMs
@@ -106,16 +125,19 @@ def create_memory_interface(options, model, range, index, intlv_size, intlv_bits
         # If the channel bits are appearing after the column
         # bits, we need to add the appropriate number of bits
         # for the row buffer size
-        if interface.addr_mapping.value == 'RoRaBaChCo':
+        if interface.addr_mapping.value == "RoRaBaChCo":
             # This computation only really needs to happen
             # once, but as we rely on having an instance we
             # end up having to repeat it for each and every
             # one
-            rowbuffer_size = interface.device_rowbuffer_size.value * interface.devices_per_rank.value
+            rowbuffer_size = (
+                interface.device_rowbuffer_size.value
+                * interface.devices_per_rank.value
+            )
 
             intlv_low_bit = int(math.log(rowbuffer_size, 2))
 
-        if interface.addr_mapping.value == 'RoCoRaBaCh': 
+        if interface.addr_mapping.value == "RoCoRaBaCh":
             intlv_low_bit = int(math.log(intlv_size, 2))
 
     # Also adjust interleaving bits for NVM attached as memory
@@ -124,7 +146,7 @@ def create_memory_interface(options, model, range, index, intlv_size, intlv_bits
         # If the channel bits are appearing after the low order
         # address bits (buffer bits), we need to add the appropriate
         # number of bits for the buffer size
-        if interface.addr_mapping.value == 'RoRaBaChCo':
+        if interface.addr_mapping.value == "RoRaBaChCo":
             # This computation only really needs to happen
             # once, but as we rely on having an instance we
             # end up having to repeat it for each and every
@@ -137,13 +159,13 @@ def create_memory_interface(options, model, range, index, intlv_size, intlv_bits
     # range
     interface.range = m5.objects.AddrRange(
         range.start,
-        size = range.size(),
-        intlvHighBit = intlv_low_bit + intlv_bits - 1,
-        xorHighBit   = xor_high_bit,
-        intlvBits    = intlv_bits,
-        intlvMatch   = index
-        )
-        
+        size=range.size(),
+        intlvHighBit=intlv_low_bit + intlv_bits - 1,
+        xorHighBit=xor_high_bit,
+        intlvBits=intlv_bits,
+        intlvMatch=index,
+    )
+
     print("AddrRange options: ")
     print("Start: ", range.start)
     print("Size: ", range.size())
@@ -153,13 +175,12 @@ def create_memory_interface(options, model, range, index, intlv_size, intlv_bits
     print("intlvMatch: ", index)
 
     if access_backing_store:
-        interface.kvm_map=False
+        interface.kvm_map = False
 
     return interface
 
 
-def configure_mem_region_controller(options, system, dir_cntrls: list): 
-
+def configure_mem_region_controller(options, system, dir_cntrls: list):
     """
     Configure Directory and Memory controllers for a single memory region
     """
@@ -169,12 +190,16 @@ def configure_mem_region_controller(options, system, dir_cntrls: list):
 
     mem_ctrls = []
     # Loop over regions
-    for region_id, mem_region in enumerate(options.architecture.memory.regions):
+    for region_id, mem_region in enumerate(
+        options.architecture.memory.regions
+    ):
         # Collect all controllers corresponding to mem region
-        region_ctrls   = [cntrl for (r_id, cntrl) in dir_cntrls if r_id == region_id]
+        region_ctrls = [
+            cntrl for (r_id, cntrl) in dir_cntrls if r_id == region_id
+        ]
         num_dir_cntrls = len(region_ctrls)
-        mem_range      = system.mem_ranges[region_id]
-        mem_options    = options.parameters["memory"][region_id]
+        mem_range = system.mem_ranges[region_id]
+        mem_options = options.parameters["memory"][region_id]
 
         # if the numa_bit is not specified, set the directory bits as the
         # lowest bits above the block offset bits
@@ -188,31 +213,34 @@ def configure_mem_region_controller(options, system, dir_cntrls: list):
         for index, dir_cntrl in enumerate(region_ctrls):
 
             # [lnghrdntcr] Heterogeneous memory controller
-            if mem_region.model == "HMEM": 
+            if mem_region.model == "HMEM":
                 interfaces = []
                 start = mem_range.start.value
                 size = mem_range.size()
-                for kind_id, m_model in enumerate(mem_region.kind): 
+                for kind_id, m_model in enumerate(mem_region.kind):
                     # FIXME: Do not assume that the two interfaces are of the same size!!!
-                    m_addr_range = m5.objects.AddrRange(start, size=int(size / 2))
+                    m_addr_range = m5.objects.AddrRange(
+                        start, size=int(size / 2)
+                    )
                     interfaces.append(
                         create_memory_interface(
-                            options, 
-                            m_model, 
-                            m_addr_range, 
-                            index, 
-                            intlv_size, 
+                            options,
+                            m_model,
+                            m_addr_range,
+                            index,
+                            intlv_size,
                             intlv_bits,
                             mem_options=mem_options,
-                            hetero_mem_id=kind_id
+                            hetero_mem_id=kind_id,
                         )
                     )
-                    start = m_addr_range.start + int(size/2)
+                    start = m_addr_range.start + int(size / 2)
 
-                
-                mem_ctrl = m5.objects.HeteroMemCtrl(dram = interfaces[0], second_interface=interfaces[1])
+                mem_ctrl = m5.objects.HeteroMemCtrl(
+                    dram=interfaces[0], second_interface=interfaces[1]
+                )
 
-            else: 
+            else:
                 m_range = mem_range
                 m_model = mem_region.model
                 interface = create_memory_interface(
@@ -223,29 +251,48 @@ def configure_mem_region_controller(options, system, dir_cntrls: list):
                     intlv_size,
                     intlv_bits,
                     mem_options=mem_options,
-                    just_range = (mem_region.model == "BwLatCtrl") or (mem_region.model == "Ramulator2")
+                    just_range=(mem_region.model == "BwLatCtrl")
+                    or (mem_region.model == "Ramulator2"),
                 )
 
-                if mem_region.model == "BwLatCtrl": 
+                if mem_region.model == "BwLatCtrl":
                     ctrl_config = mem_region.ctrl_config
-                    mem_ctrl = m5.objects.BwLatCtrl(range=interface, curves_path = ctrl_config["curves_path"], sampling_window = ctrl_config["sampling_window"])
+                    mem_ctrl = m5.objects.BwLatCtrl(
+                        range=interface,
+                        curves_path=ctrl_config["curves_path"],
+                        sampling_window=ctrl_config["sampling_window"],
+                    )
                 elif mem_region.model == "Ramulator2":
                     mem_ctrl = m5.objects.Ramulator2(range=interface)
                     mem_ctrl.config_path = mem_region.config_file
-                else: 
-                    mem_ctrl = m5.objects.MemCtrl(dram = interface) if (mem_region.model != 'Simple') else interface
+                else:
+                    mem_ctrl = (
+                        m5.objects.MemCtrl(dram=interface)
+                        if (mem_region.model != "Simple")
+                        else interface
+                    )
 
             # Enable low-power DRAM states if option is set
-            if mem_region.model != 'Simple' and mem_region.model != "NVM" and mem_region.model != "BwLatCtrl" and mem_region.model != "Ramulator2":
-                mem_ctrl.dram.enable_dram_powerdown = mem_region.enable_dram_powerdown
+            if (
+                mem_region.model != "Simple"
+                and mem_region.model != "NVM"
+                and mem_region.model != "BwLatCtrl"
+                and mem_region.model != "Ramulator2"
+            ):
+                mem_ctrl.dram.enable_dram_powerdown = (
+                    mem_region.enable_dram_powerdown
+                )
 
             mem_ctrl.port = dir_cntrl.memory_out_port
 
-            if mem_region.model == "BwLatCtrl" or mem_region.model == "Ramulator2": 
+            if (
+                mem_region.model == "BwLatCtrl"
+                or mem_region.model == "Ramulator2"
+            ):
                 dir_cntrl.addr_ranges = [interface]
-            elif mem_region.model == "HMEM": 
+            elif mem_region.model == "HMEM":
                 dir_cntrl.addr_ranges = [i.range for i in interfaces]
-            else: 
+            else:
                 dir_cntrl.addr_ranges = [interface.range]
 
             mem_ctrls.append(mem_ctrl)

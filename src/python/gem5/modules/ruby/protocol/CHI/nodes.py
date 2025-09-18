@@ -36,25 +36,25 @@
 
 import m5
 
+from gem5.modules.caches.prefetcher import (
+    AMPM,
+    BOP,
+    DCPT,
+    PIF,
+    SBOOE,
+    IndirectMemory,
+    IrregularStreamBuffer,
+    SignaturePath,
+    SignaturePath2,
+    SlimAMPM,
+    STeMS,
+    Stride,
+    Tagged,
+)
 from gem5.modules.options import Options
-
 from gem5.modules.ruby.protocol.CHI import controllers
 from gem5.modules.ruby.protocol.CHI.util import slc_mask
 
-
-from gem5.modules.caches.prefetcher import Stride
-from gem5.modules.caches.prefetcher import Tagged
-from gem5.modules.caches.prefetcher import IndirectMemory
-from gem5.modules.caches.prefetcher import SignaturePath
-from gem5.modules.caches.prefetcher import SignaturePath2
-from gem5.modules.caches.prefetcher import AMPM
-from gem5.modules.caches.prefetcher import DCPT
-from gem5.modules.caches.prefetcher import IrregularStreamBuffer
-from gem5.modules.caches.prefetcher import SlimAMPM
-from gem5.modules.caches.prefetcher import BOP
-from gem5.modules.caches.prefetcher import SBOOE
-from gem5.modules.caches.prefetcher import STeMS
-from gem5.modules.caches.prefetcher import PIF
 
 def get_prefetcher(options):
     def get_prefetcher_class(name: str):
@@ -71,24 +71,37 @@ def get_prefetcher(options):
             BOP=BOP,
             SBOOE=SBOOE,
             STeMS=STeMS,
-            PIF=PIF
+            PIF=PIF,
         ).get(name, None)
-    pf_cls = get_prefetcher_class(options.selected) if options != None else None
+
+    pf_cls = (
+        get_prefetcher_class(options.selected) if options != None else None
+    )
     print(f"Prefetcher is {pf_cls.__name__ if pf_cls else 'None'}")
-    print(f"Configuration: {options.configuration[options.selected] if pf_cls else 'None'}")
-    return m5.objects.RubyPrefetcherWrapper(prefetcher=pf_cls(parameters=options.configuration[options.selected])) if pf_cls != None else m5.objects.NULL
+    print(
+        f"Configuration: {options.configuration[options.selected] if pf_cls else 'None'}"
+    )
+    return (
+        m5.objects.RubyPrefetcherWrapper(
+            prefetcher=pf_cls(
+                parameters=options.configuration[options.selected]
+            )
+        )
+        if pf_cls != None
+        else m5.objects.NULL
+    )
 
 
 class CHI_Node(m5.objects.SubSystem):
-    '''
+    """
     Base class with common functions for setting up Cache or Memory
     controllers that are part of a CHI RNF, RNFI, HNF, or SNF nodes.
     Notice getNetworkSideControllers and getAllControllers must be implemented
     in the derived classes.
-    '''
+    """
 
     def __init__(self, ruby_system):
-        super(CHI_Node, self).__init__()
+        super().__init__()
         self._ruby_system = ruby_system
         self._network = ruby_system.network
 
@@ -96,30 +109,30 @@ class CHI_Node(m5.objects.SubSystem):
         self._numa_id = 0
 
     def getNetworkSideControllers(self):
-        '''
+        """
         Returns all ruby controllers that need to be connected to the
         network
-        '''
+        """
         raise NotImplementedError()
 
     def getAllControllers(self):
-        '''
+        """
         Returns all ruby controllers associated with this node
-        '''
+        """
         raise NotImplementedError()
 
     def setDownstream(self, cntrls):
-        '''
+        """
         Sets cntrls as the downstream list of all controllers in this node
-        '''
+        """
         for c in self.getNetworkSideControllers():
             c.downstream_destinations = cntrls
 
     def connectController(self, cntrl, options: Options):
-        '''
+        """
         Creates and configures the messages buffers for the CHI input/output
         ports that connect to the network
-        '''
+        """
         cntrl.reqOut = m5.objects.MessageBuffer()
         cntrl.rspOut = m5.objects.MessageBuffer()
         cntrl.snpOut = m5.objects.MessageBuffer()
@@ -147,33 +160,33 @@ class CHI_Node(m5.objects.SubSystem):
 
 
 class CPUSequencerWrapper:
-    '''
+    """
     Other generic configuration scripts assume a matching number of sequencers
     and cpus. This wraps the instruction and data sequencer so they are
     compatible with the other scripts. This assumes all scripts are using
     connectCpuPorts/connectIOPorts to bind ports
-    '''
+    """
 
     def __init__(self, iseq, dseq):
         # use this style due to __setattr__ override below
-        self.__dict__['inst_seq'] = iseq
-        self.__dict__['data_seq'] = dseq
-        self.__dict__['support_data_reqs'] = True
-        self.__dict__['support_inst_reqs'] = True
+        self.__dict__["inst_seq"] = iseq
+        self.__dict__["data_seq"] = dseq
+        self.__dict__["support_data_reqs"] = True
+        self.__dict__["support_inst_reqs"] = True
         # Compatibility with certain scripts that wire up ports
         # without connectCpuPorts
-        self.__dict__['slave'] = dseq.in_ports
-        self.__dict__['in_ports'] = dseq.in_ports
+        self.__dict__["slave"] = dseq.in_ports
+        self.__dict__["in_ports"] = dseq.in_ports
 
     def connectCpuPorts(self, cpu):
-        assert(isinstance(cpu, m5.objects.BaseCPU))
+        assert isinstance(cpu, m5.objects.BaseCPU)
         cpu.icache_port = self.inst_seq.in_ports
         for p in cpu._cached_ports:
-            if str(p) != 'icache_port':
-                exec('cpu.%s = self.data_seq.in_ports' % p)
+            if str(p) != "icache_port":
+                exec("cpu.%s = self.data_seq.in_ports" % p)
         cpu.connectUncachedPorts(
-            self.data_seq.in_ports, self.data_seq.interrupt_out_port)
-
+            self.data_seq.in_ports, self.data_seq.interrupt_out_port
+        )
 
     def connectIOPorts(self, piobus):
         self.data_seq.connectIOPorts(piobus)
@@ -184,15 +197,17 @@ class CPUSequencerWrapper:
 
 
 class CHI_RNF(CHI_Node):
-    '''
+    """
     Defines a CHI request node.
     Notice all contollers and sequencers are set as children of the cpus, so
     this object acts more like a proxy for seting things up and has no topology
     significance unless the cpus are set as its children at the top level
-    '''
+    """
 
-    def __init__(self, options: Options, cpus, ruby_system, router_id = None, numa_id=0):
-        super(CHI_RNF, self).__init__(ruby_system)
+    def __init__(
+        self, options: Options, cpus, ruby_system, router_id=None, numa_id=0
+    ):
+        super().__init__(ruby_system)
 
         # All sequencers and controllers
         self._seqs = []
@@ -205,7 +220,7 @@ class CHI_RNF(CHI_Node):
         self._cpus = cpus
 
         self._router_id = router_id
-        self._numa_id   = numa_id
+        self._numa_id = numa_id
 
         self.create_caches(options)
 
@@ -218,14 +233,16 @@ class CHI_RNF(CHI_Node):
 
             cpu.inst_sequencer = controllers.Sequencer(
                 self._ruby_system,
-                max_outstanding_requests=options.architecture.caches.L1I.sequencer.max_outstanding_requests
+                max_outstanding_requests=options.architecture.caches.L1I.sequencer.max_outstanding_requests,
             )
             cpu.data_sequencer = controllers.Sequencer(
                 self._ruby_system,
-                max_outstanding_requests=options.architecture.caches.L1D.sequencer.max_outstanding_requests
+                max_outstanding_requests=options.architecture.caches.L1D.sequencer.max_outstanding_requests,
             )
 
-            self._seqs.append(CPUSequencerWrapper(cpu.inst_sequencer, cpu.data_sequencer))
+            self._seqs.append(
+                CPUSequencerWrapper(cpu.inst_sequencer, cpu.data_sequencer)
+            )
 
             l1i_pf = get_prefetcher(options.architecture.caches.L1I.prefetcher)
             l1d_pf = get_prefetcher(options.architecture.caches.L1D.prefetcher)
@@ -235,13 +252,13 @@ class CHI_RNF(CHI_Node):
                 self._ruby_system,
                 cpu.inst_sequencer,
                 options.architecture.caches.L1I,
-                prefetcher=l1i_pf
+                prefetcher=l1i_pf,
             )
             cpu.l1d = controllers.DBC_CHI_L1Controller(
                 self._ruby_system,
                 cpu.data_sequencer,
                 options.architecture.caches.L1D,
-                prefetcher=l1d_pf
+                prefetcher=l1d_pf,
             )
 
             print(f"L1 Prefetcher: I -> {l1i_pf}, D -> {l1d_pf}")
@@ -282,7 +299,7 @@ class CHI_RNF(CHI_Node):
             cpu.l2 = controllers.DBC_CHI_L2Controller(
                 self._ruby_system,
                 options.architecture.caches.L2,
-                prefetcher=l2_pf
+                prefetcher=l2_pf,
             )
 
             print(f"L2 Prefetcher: {l2_pf}")
@@ -297,14 +314,15 @@ class CHI_RNF(CHI_Node):
 
 
 class CHI_HNF(CHI_Node):
-    '''
+    """
     Encapsulates an HNF cache/directory controller.
     Before the first controller is created, the class method
     CHI_HNF.createAddrRanges must be called before creating any CHI_HNF object
     to set-up the interleaved address ranges used by the HNFs
-    '''
+    """
 
     _addr_ranges = {}
+
     @classmethod
     def createAddrRanges(cls, options, mem_ranges, hnf_ids: list, numa_id=0):
         # Create the HNFs interleaved addr ranges
@@ -315,38 +333,46 @@ class CHI_HNF(CHI_Node):
         for i, hnf_id in enumerate(hnf_ids):
             ranges = []
             for mem_range in mem_ranges:
-                # [lnghrdntcr]: If mem_ranges is a list, consider the address range as starting from the beginning 
+                # [lnghrdntcr]: If mem_ranges is a list, consider the address range as starting from the beginning
                 # of the N memory ranges, and the size being the sum of sizes of the mem_ranges
-                if type(mem_range) == list: 
+                if type(mem_range) == list:
                     mem_range_start = mem_range[0].start
-                    mem_range_size  = sum([s.size() for s in mem_range])
-                else: 
+                    mem_range_size = sum([s.size() for s in mem_range])
+                else:
                     mem_range_start = mem_range.start
-                    mem_range_size  = mem_range.size()
+                    mem_range_size = mem_range.size()
 
                 addr_range = m5.objects.AddrRange(
                     mem_range_start,
-                    size = mem_range_size, 
-                    masks = mask,
-                    intlvMatch = i
+                    size=mem_range_size,
+                    masks=mask,
+                    intlvMatch=i,
                 )
                 ranges.append(addr_range)
             cls._addr_ranges[hnf_id] = (ranges, numa_id, i)
 
     @classmethod
     def getAddrRanges(cls, hnf_id):
-        assert(len(cls._addr_ranges) != 0)
+        assert len(cls._addr_ranges) != 0
         return cls._addr_ranges[hnf_id]
 
     # The CHI controller can be a child of this object or another if 'parent' is specified
-    def __init__(self, options : Options, hnf_id, ruby_system, parent=None, router_id = None, numa_id=0):
-        super(CHI_HNF, self).__init__(ruby_system)
+    def __init__(
+        self,
+        options: Options,
+        hnf_id,
+        ruby_system,
+        parent=None,
+        router_id=None,
+        numa_id=0,
+    ):
+        super().__init__(ruby_system)
 
         addr_ranges, addr_numa_id, intlvMatch = CHI_HNF.getAddrRanges(hnf_id)
         # All ranges should have the same interleaving
-        assert(len(addr_ranges) >= 1)
+        assert len(addr_ranges) >= 1
         # Node NUMA ID should be same as address range NUMA ID
-        assert(numa_id == addr_numa_id)
+        assert numa_id == addr_numa_id
 
         self._router_id = router_id
         self._numa_id = numa_id
@@ -357,7 +383,7 @@ class CHI_HNF(CHI_Node):
             ruby_system,
             addr_ranges,
             options.architecture.caches.SLC,
-            prefetcher=slc_pf
+            prefetcher=slc_pf,
         )
 
         if parent == None:
@@ -375,14 +401,16 @@ class CHI_HNF(CHI_Node):
 
 
 class CHI_SNF_Base(CHI_Node):
-    '''
+    """
     Creates CHI node controllers for the memory controllers
-    '''
+    """
 
     # The CHI controller can be a child of this object or another if
     # 'parent' if specified
-    def __init__(self, options : Options, ruby_system, parent=None, region_id=None):
-        super(CHI_SNF_Base, self).__init__(ruby_system)
+    def __init__(
+        self, options: Options, ruby_system, parent=None, region_id=None
+    ):
+        super().__init__(ruby_system)
 
         self._cntrl = controllers.DBC_CHI_Memory_Controller(ruby_system)
 
@@ -395,10 +423,9 @@ class CHI_SNF_Base(CHI_Node):
         else:
             self.cntrl = self._cntrl
 
-
     def getAllControllers(self):
         return [self._cntrl]
-    
+
     def getAllRegionIdControllers(self):
         return [(self._region_id, self._cntrl)]
 
@@ -408,16 +435,17 @@ class CHI_SNF_Base(CHI_Node):
     def getMemRange(self, mem_ctrl):
         # TODO need some kind of transparent API for
         # MemCtrl+DRAM vs SimpleMemory
-        if hasattr(mem_ctrl, 'range'):
+        if hasattr(mem_ctrl, "range"):
             return mem_ctrl.range
         else:
             return mem_ctrl.dram.range
 
 
 class CHI_SNF_BootMem(CHI_SNF_Base):
-    '''
+    """
     Create the SNF for the boot memory
-    '''
+    """
+
     def __init__(self, options: Options, ruby_system, parent, bootmem):
         super().__init__(options, ruby_system, parent)
         self._cntrl.memory_out_port = bootmem.port
@@ -425,13 +453,23 @@ class CHI_SNF_BootMem(CHI_SNF_Base):
 
 
 class CHI_SNF_MainMem(CHI_SNF_Base):
-    '''
+    """
     Create the SNF for a list main memory controllers
-    '''
-    def __init__(self, options: Options, ruby_system, parent=None, mem_ctrl = None, router_id = None, region_id = None, numa_id=0):
+    """
+
+    def __init__(
+        self,
+        options: Options,
+        ruby_system,
+        parent=None,
+        mem_ctrl=None,
+        router_id=None,
+        region_id=None,
+        numa_id=0,
+    ):
         super().__init__(options, ruby_system, parent)
         self._router_id = router_id
-        self._numa_id   = numa_id
+        self._numa_id = numa_id
         self._region_id = region_id
         if mem_ctrl:
             self._cntrl.memory_out_port = mem_ctrl.port
@@ -440,20 +478,22 @@ class CHI_SNF_MainMem(CHI_SNF_Base):
 
 
 class CHI_RNI_Base(CHI_Node):
-    '''
+    """
     Request node without cache / DMA
-    '''
+    """
+
     # The CHI controller can be a child of this object or another if
     # 'parent' if specified
-    def __init__(self, options : Options, ruby_system, parent):
+    def __init__(self, options: Options, ruby_system, parent):
         super().__init__(ruby_system)
 
         self._sequencer = controllers.Sequencer(
-            ruby_system,
-            clk_domain  = ruby_system.clk_domain
+            ruby_system, clk_domain=ruby_system.clk_domain
         )
 
-        self._cntrl = controllers.DBC_CHI_DMAController(ruby_system, self._sequencer)
+        self._cntrl = controllers.DBC_CHI_DMAController(
+            ruby_system, self._sequencer
+        )
 
         if parent:
             parent.cntrl = self._cntrl
@@ -461,7 +501,6 @@ class CHI_RNI_Base(CHI_Node):
             self.cntrl = self._cntrl
 
         self.connectController(self._cntrl, options)
-
 
     def getAllControllers(self):
         return [self._cntrl]
@@ -471,19 +510,21 @@ class CHI_RNI_Base(CHI_Node):
 
 
 class CHI_RNI_DMA(CHI_RNI_Base):
-    '''
+    """
     DMA controller wiredup to a given dma port
-    '''
-    def __init__(self, options : Options, ruby_system, dma_port, parent):
+    """
+
+    def __init__(self, options: Options, ruby_system, dma_port, parent):
         super().__init__(options, ruby_system, parent)
-        assert(dma_port != None)
+        assert dma_port != None
         self._sequencer.in_ports = dma_port
 
 
 class CHI_RNI_IO(CHI_RNI_Base):
-    '''
+    """
     DMA controller wiredup to ruby_system IO port
-    '''
-    def __init__(self, options : Options, ruby_system, parent):
+    """
+
+    def __init__(self, options: Options, ruby_system, parent):
         super().__init__(options, ruby_system, parent)
         ruby_system._io_port = self._sequencer

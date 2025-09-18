@@ -38,81 +38,93 @@
 import m5
 from m5.objects import OpDesc
 
-#from gem5.modules.options.options import CPU
+# from gem5.modules.options.options import CPU
+
 
 # Simple ALU Instructions have a latency of 1
 class Cortex_A76_Simple_Int(m5.objects.FUDesc):
-    opList = [ OpDesc(opClass='IntAlu', opLat=1) ]
+    opList = [OpDesc(opClass="IntAlu", opLat=1)]
     count = 3
+
 
 # Complex ALU instructions have a variable latencies
 class Cortex_A76_Complex_Int(m5.objects.FUDesc):
-    opList = [ OpDesc(opClass='IntMult', opLat=3, pipelined=True),
-               OpDesc(opClass='IntDiv', opLat=12, pipelined=False),
-               OpDesc(opClass='IprAccess', opLat=3, pipelined=True) ]
+    opList = [
+        OpDesc(opClass="IntMult", opLat=3, pipelined=True),
+        OpDesc(opClass="IntDiv", opLat=12, pipelined=False),
+        OpDesc(opClass="IprAccess", opLat=3, pipelined=True),
+    ]
     count = 2
+
 
 # Floating point and SIMD instructions
 class Cortex_A76_FP(m5.objects.FUDesc):
-    opList = [ OpDesc(opClass='SimdAdd', opLat=4),
-               OpDesc(opClass='SimdAddAcc', opLat=4),
-               OpDesc(opClass='SimdAlu', opLat=4),
-               OpDesc(opClass='SimdCmp', opLat=4),
-               OpDesc(opClass='SimdCvt', opLat=3),
-               OpDesc(opClass='SimdMisc', opLat=3),
-               OpDesc(opClass='SimdMult',opLat=5),
-               OpDesc(opClass='SimdMultAcc',opLat=5),
-               OpDesc(opClass='SimdShift',opLat=3),
-               OpDesc(opClass='SimdShiftAcc', opLat=3),
-               OpDesc(opClass='SimdDiv', opLat=9, pipelined=False),
-               OpDesc(opClass='SimdSqrt', opLat=9),
-               OpDesc(opClass='SimdFloatAdd',opLat=5),
-               OpDesc(opClass='SimdFloatAlu',opLat=5),
-               OpDesc(opClass='SimdFloatCmp', opLat=3),
-               OpDesc(opClass='SimdFloatCvt', opLat=3),
-               OpDesc(opClass='SimdFloatDiv', opLat=3),
-               OpDesc(opClass='SimdFloatMisc', opLat=3),
-               OpDesc(opClass='SimdFloatMult', opLat=3),
-               OpDesc(opClass='SimdFloatMultAcc',opLat=5),
-               OpDesc(opClass='SimdFloatSqrt', opLat=9),
-               OpDesc(opClass='SimdReduceAdd'),
-               OpDesc(opClass='SimdReduceAlu'),
-               OpDesc(opClass='SimdReduceCmp'),
-               OpDesc(opClass='SimdFloatReduceAdd'),
-               OpDesc(opClass='SimdFloatReduceCmp'),
-               OpDesc(opClass='FloatAdd', opLat=5),
-               OpDesc(opClass='FloatCmp', opLat=5),
-               OpDesc(opClass='FloatCvt', opLat=5),
-               OpDesc(opClass='FloatDiv', opLat=9, pipelined=False),
-               OpDesc(opClass='FloatSqrt', opLat=33, pipelined=False),
-               OpDesc(opClass='FloatMult', opLat=4),
-               OpDesc(opClass='FloatMultAcc', opLat=5),
-               OpDesc(opClass='FloatMisc', opLat=3) ]
+    opList = [
+        OpDesc(opClass="SimdAdd", opLat=4),
+        OpDesc(opClass="SimdAddAcc", opLat=4),
+        OpDesc(opClass="SimdAlu", opLat=4),
+        OpDesc(opClass="SimdCmp", opLat=4),
+        OpDesc(opClass="SimdCvt", opLat=3),
+        OpDesc(opClass="SimdMisc", opLat=3),
+        OpDesc(opClass="SimdMult", opLat=5),
+        OpDesc(opClass="SimdMultAcc", opLat=5),
+        OpDesc(opClass="SimdShift", opLat=3),
+        OpDesc(opClass="SimdShiftAcc", opLat=3),
+        OpDesc(opClass="SimdDiv", opLat=9, pipelined=False),
+        OpDesc(opClass="SimdSqrt", opLat=9),
+        OpDesc(opClass="SimdFloatAdd", opLat=5),
+        OpDesc(opClass="SimdFloatAlu", opLat=5),
+        OpDesc(opClass="SimdFloatCmp", opLat=3),
+        OpDesc(opClass="SimdFloatCvt", opLat=3),
+        OpDesc(opClass="SimdFloatDiv", opLat=3),
+        OpDesc(opClass="SimdFloatMisc", opLat=3),
+        OpDesc(opClass="SimdFloatMult", opLat=3),
+        OpDesc(opClass="SimdFloatMultAcc", opLat=5),
+        OpDesc(opClass="SimdFloatSqrt", opLat=9),
+        OpDesc(opClass="SimdReduceAdd"),
+        OpDesc(opClass="SimdReduceAlu"),
+        OpDesc(opClass="SimdReduceCmp"),
+        OpDesc(opClass="SimdFloatReduceAdd"),
+        OpDesc(opClass="SimdFloatReduceCmp"),
+        OpDesc(opClass="FloatAdd", opLat=5),
+        OpDesc(opClass="FloatCmp", opLat=5),
+        OpDesc(opClass="FloatCvt", opLat=5),
+        OpDesc(opClass="FloatDiv", opLat=9, pipelined=False),
+        OpDesc(opClass="FloatSqrt", opLat=33, pipelined=False),
+        OpDesc(opClass="FloatMult", opLat=4),
+        OpDesc(opClass="FloatMultAcc", opLat=5),
+        OpDesc(opClass="FloatMisc", opLat=3),
+    ]
     count = 2
+
 
 # Load/Store Units
 class Cortex_A76_Load(m5.objects.FUDesc):
-    opList = [ OpDesc(opClass='MemRead'),
-               OpDesc(opClass='FloatMemRead') ]
+    opList = [OpDesc(opClass="MemRead"), OpDesc(opClass="FloatMemRead")]
     count = 2
 
+
 class Cortex_A76_Store(m5.objects.FUDesc):
-    opList = [ OpDesc(opClass='MemWrite'),
-               OpDesc(opClass='FloatMemWrite') ]
+    opList = [OpDesc(opClass="MemWrite"), OpDesc(opClass="FloatMemWrite")]
     count = 1
 
+
 class Cortex_A76_PredALU(m5.objects.FUDesc):
-    opList = [ OpDesc(opClass='SimdPredAlu') ]
+    opList = [OpDesc(opClass="SimdPredAlu")]
     count = 1
+
 
 # Functional Units for this CPU
 class Cortex_A76_FUP(m5.objects.FUPool):
-    FUList = [Cortex_A76_Simple_Int(),
-              Cortex_A76_Complex_Int(),
-              Cortex_A76_Load(),
-              Cortex_A76_Store(),
-              Cortex_A76_PredALU(),
-              Cortex_A76_FP()]
+    FUList = [
+        Cortex_A76_Simple_Int(),
+        Cortex_A76_Complex_Int(),
+        Cortex_A76_Load(),
+        Cortex_A76_Store(),
+        Cortex_A76_PredALU(),
+        Cortex_A76_FP(),
+    ]
+
 
 # Bi-Mode Branch Predictor
 class Cortex_A76_BP(m5.objects.BiModeBP):
@@ -124,6 +136,7 @@ class Cortex_A76_BP(m5.objects.BiModeBP):
     # BTBTagSize = 16
     # RASSize = 16
     instShiftAmt = 2
+
 
 class Cortex_A76(m5.objects.O3CPU):
     LSQDepCheckShift = 0
@@ -165,10 +178,11 @@ class Cortex_A76(m5.objects.O3CPU):
     SQEntries = 72
     numIQEntries = 120
 
-    #switched_out = False
+    # switched_out = False
     branchPred = Cortex_A76_BP()
-    #branchPred = Param.BranchPredictor(TournamentBP(
+    # branchPred = Param.BranchPredictor(TournamentBP(
     #    numThreads = Parent.numThreads), "Branch Predictor")
+
 
 class R_CPU_Cortex(Cortex_A76):
     fetchWidth = 8
@@ -180,87 +194,99 @@ class R_CPU_Cortex(Cortex_A76):
     numROBEntries = 224
     numPhysVecPredRegs = 64
     numPhysVecRegs = 364
-    
+
     def __init__(self, opts, **kwargs):
-        super(R_CPU_Cortex, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
 
 # Simple ALU Instructions have a latency of 1
 class R_CPU_Simple_Int(m5.objects.FUDesc):
-    opList = [ OpDesc(opClass='IntAlu', opLat=1) ]
+    opList = [OpDesc(opClass="IntAlu", opLat=1)]
     count = 3
+
 
 # Complex ALU instructions have a variable latencies
 class R_CPU_Complex_Int(m5.objects.FUDesc):
-    opList = [ OpDesc(opClass='IntMult', opLat=3, pipelined=True),
-               OpDesc(opClass='IntDiv', opLat=12, pipelined=False),
-               OpDesc(opClass='IprAccess', opLat=3, pipelined=True) ]
+    opList = [
+        OpDesc(opClass="IntMult", opLat=3, pipelined=True),
+        OpDesc(opClass="IntDiv", opLat=12, pipelined=False),
+        OpDesc(opClass="IprAccess", opLat=3, pipelined=True),
+    ]
     count = 2
+
 
 # Floating point and SIMD instructions
 class R_CPU_FP(m5.objects.FUDesc):
-    opList = [ OpDesc(opClass='SimdAdd', opLat=4),
-               OpDesc(opClass='SimdAddAcc', opLat=4),
-               OpDesc(opClass='SimdAlu', opLat=4),
-               OpDesc(opClass='SimdCmp', opLat=4),
-               OpDesc(opClass='SimdCvt', opLat=3),
-               OpDesc(opClass='SimdMisc', opLat=3),
-               OpDesc(opClass='SimdMult',opLat=5),
-               OpDesc(opClass='SimdMultAcc',opLat=5),
-               OpDesc(opClass='SimdShift',opLat=3),
-               OpDesc(opClass='SimdShiftAcc', opLat=3),
-               OpDesc(opClass='SimdDiv', opLat=9, pipelined=False),
-               OpDesc(opClass='SimdSqrt', opLat=9),
-               OpDesc(opClass='SimdFloatAdd',opLat=5),
-               OpDesc(opClass='SimdFloatAlu',opLat=5),
-               OpDesc(opClass='SimdFloatCmp', opLat=3),
-               OpDesc(opClass='SimdFloatCvt', opLat=3),
-               OpDesc(opClass='SimdFloatDiv', opLat=3),
-               OpDesc(opClass='SimdFloatMisc', opLat=3),
-               OpDesc(opClass='SimdFloatMult', opLat=3),
-               OpDesc(opClass='SimdFloatMultAcc',opLat=5),
-               OpDesc(opClass='SimdFloatSqrt', opLat=9),
-               OpDesc(opClass='SimdReduceAdd'),
-               OpDesc(opClass='SimdReduceAlu'),
-               OpDesc(opClass='SimdReduceCmp'),
-               OpDesc(opClass='SimdFloatReduceAdd'),
-               OpDesc(opClass='SimdFloatReduceCmp'),
-               OpDesc(opClass='FloatAdd', opLat=5),
-               OpDesc(opClass='FloatCmp', opLat=5),
-               OpDesc(opClass='FloatCvt', opLat=5),
-               OpDesc(opClass='FloatDiv', opLat=9, pipelined=False),
-               OpDesc(opClass='FloatSqrt', opLat=33, pipelined=False),
-               OpDesc(opClass='FloatMult', opLat=4),
-               OpDesc(opClass='FloatMultAcc', opLat=5),
-               OpDesc(opClass='FloatMisc', opLat=3) ]
+    opList = [
+        OpDesc(opClass="SimdAdd", opLat=4),
+        OpDesc(opClass="SimdAddAcc", opLat=4),
+        OpDesc(opClass="SimdAlu", opLat=4),
+        OpDesc(opClass="SimdCmp", opLat=4),
+        OpDesc(opClass="SimdCvt", opLat=3),
+        OpDesc(opClass="SimdMisc", opLat=3),
+        OpDesc(opClass="SimdMult", opLat=5),
+        OpDesc(opClass="SimdMultAcc", opLat=5),
+        OpDesc(opClass="SimdShift", opLat=3),
+        OpDesc(opClass="SimdShiftAcc", opLat=3),
+        OpDesc(opClass="SimdDiv", opLat=9, pipelined=False),
+        OpDesc(opClass="SimdSqrt", opLat=9),
+        OpDesc(opClass="SimdFloatAdd", opLat=5),
+        OpDesc(opClass="SimdFloatAlu", opLat=5),
+        OpDesc(opClass="SimdFloatCmp", opLat=3),
+        OpDesc(opClass="SimdFloatCvt", opLat=3),
+        OpDesc(opClass="SimdFloatDiv", opLat=3),
+        OpDesc(opClass="SimdFloatMisc", opLat=3),
+        OpDesc(opClass="SimdFloatMult", opLat=3),
+        OpDesc(opClass="SimdFloatMultAcc", opLat=5),
+        OpDesc(opClass="SimdFloatSqrt", opLat=9),
+        OpDesc(opClass="SimdReduceAdd"),
+        OpDesc(opClass="SimdReduceAlu"),
+        OpDesc(opClass="SimdReduceCmp"),
+        OpDesc(opClass="SimdFloatReduceAdd"),
+        OpDesc(opClass="SimdFloatReduceCmp"),
+        OpDesc(opClass="FloatAdd", opLat=5),
+        OpDesc(opClass="FloatCmp", opLat=5),
+        OpDesc(opClass="FloatCvt", opLat=5),
+        OpDesc(opClass="FloatDiv", opLat=9, pipelined=False),
+        OpDesc(opClass="FloatSqrt", opLat=33, pipelined=False),
+        OpDesc(opClass="FloatMult", opLat=4),
+        OpDesc(opClass="FloatMultAcc", opLat=5),
+        OpDesc(opClass="FloatMisc", opLat=3),
+    ]
     count = 2
+
 
 # Load/Store Units
 class R_CPU_Load(m5.objects.FUDesc):
-    opList = [ OpDesc(opClass='MemRead'),
-               OpDesc(opClass='FloatMemRead') ]
+    opList = [OpDesc(opClass="MemRead"), OpDesc(opClass="FloatMemRead")]
     count = 2
 
+
 class R_CPU_Store(m5.objects.FUDesc):
-    opList = [ OpDesc(opClass='MemWrite'),
-               OpDesc(opClass='FloatMemWrite') ]
+    opList = [OpDesc(opClass="MemWrite"), OpDesc(opClass="FloatMemWrite")]
     count = 1
 
+
 class R_CPU_PredALU(m5.objects.FUDesc):
-    opList = [ OpDesc(opClass='SimdPredAlu') ]
+    opList = [OpDesc(opClass="SimdPredAlu")]
     count = 1
+
 
 # Functional Units for this CPU
 class R_CPU_FUP(m5.objects.FUPool):
-    FUList = [R_CPU_Simple_Int(),
-              R_CPU_Complex_Int(),
-              R_CPU_Load(),
-              R_CPU_Store(),
-              R_CPU_PredALU(),
-              R_CPU_FP()]
+    FUList = [
+        R_CPU_Simple_Int(),
+        R_CPU_Complex_Int(),
+        R_CPU_Load(),
+        R_CPU_Store(),
+        R_CPU_PredALU(),
+        R_CPU_FP(),
+    ]
+
 
 class R_BP_Tournament(m5.objects.TournamentBP):
     pass
+
 
 # Bi-Mode Branch Predictor
 class R_BP_BiMode(m5.objects.BiModeBP):
@@ -272,6 +298,7 @@ class R_BP_BiMode(m5.objects.BiModeBP):
     # BTBTagSize = 16
     # RASSize = 16
     instShiftAmt = 2
+
 
 class R_CPU(m5.objects.O3CPU):
     LSQDepCheckShift = 0
@@ -310,15 +337,15 @@ class R_CPU(m5.objects.O3CPU):
     LQEntries = 96
     SQEntries = 96
     fetchBufferSize = 64
-    #fetchQueueSize = 64
+    # fetchQueueSize = 64
     numROBEntries = 224
-    #switched_out = False
+    # switched_out = False
 
     fuPool = R_CPU_FUP()
     branchPred = R_BP_BiMode()
 
     def __init__(self, opts, **kwargs):
-        super(R_CPU, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
         if opts.branch_predictor == "Tournament":
             self.branchPred = R_BP_Tournament()
@@ -328,34 +355,36 @@ class R_CPU(m5.objects.O3CPU):
 
         parameters = opts.parameters["R_CPU"]
 
-        self.fetchBufferSize    = parameters["fetchBufferSize"]
-        self.LQEntries          = parameters["LQEntries"]
-        self.SQEntries          = parameters["SQEntries"]
-        self.LSQDepCheckShift   = parameters["LSQDepCheckShift"]
-        self.numIQEntries       = parameters["numIQEntries"]
+        self.fetchBufferSize = parameters["fetchBufferSize"]
+        self.LQEntries = parameters["LQEntries"]
+        self.SQEntries = parameters["SQEntries"]
+        self.LSQDepCheckShift = parameters["LSQDepCheckShift"]
+        self.numIQEntries = parameters["numIQEntries"]
         self.numPhysVecPredRegs = parameters["numPhysVecPredRegs"]
-        self.numPhysVecRegs     = parameters["numPhysVecRegs"]
-        self.numROBEntries      = parameters["numROBEntries"]
-        self.renameToIEWDelay   = parameters["renameToIEWDelay"]
-        self.backComSize    = parameters["backComSize"]
+        self.numPhysVecRegs = parameters["numPhysVecRegs"]
+        self.numROBEntries = parameters["numROBEntries"]
+        self.renameToIEWDelay = parameters["renameToIEWDelay"]
+        self.backComSize = parameters["backComSize"]
         self.forwardComSize = parameters["forwardComSize"]
         self.decodeWidth = parameters["decodeWidth"]
-        self.fetchWidth  = parameters["fetchWidth"]
-        self.issueWidth  = parameters["issueWidth"]
+        self.fetchWidth = parameters["fetchWidth"]
+        self.issueWidth = parameters["issueWidth"]
         self.renameWidth = parameters["renameWidth"]
 
 
 class AtomicSimple(m5.objects.AtomicSimpleCPU):
     def __init__(self, opts, **kwargs):
-        super(AtomicSimple, self).__init__(**kwargs)
+        super().__init__(**kwargs)
+
 
 class TimingSimple(m5.objects.TimingSimpleCPU):
     def __init__(self, opts, **kwargs):
-        super(TimingSimple, self).__init__(**kwargs)
+        super().__init__(**kwargs)
+
 
 class DefaultO3CPU(m5.objects.O3CPU):
     def __init__(self, opts, **kwargs):
-        super(DefaultO3CPU, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         if opts.branchPred == "Tournament":
             self.branchPred = R_BP_Tournament()
 
@@ -364,12 +393,12 @@ class DefaultO3CPU(m5.objects.O3CPU):
 
         self.LQEntries = opts.LQEntries
         self.SQEntries = opts.SQEntries
-        self.LSQDepCheckShift   = opts.LSQDepCheckShift
-        self.numIQEntries       = opts.numIQEntries
+        self.LSQDepCheckShift = opts.LSQDepCheckShift
+        self.numIQEntries = opts.numIQEntries
         self.numPhysVecPredRegs = opts.numPhysVecPredRegs
-        self.numPhysVecRegs     = opts.numPhysVecRegs
-        self.numROBEntries      = opts.numROBEntries
-        self.renameToIEWDelay   = opts.renameToIEWDelay
+        self.numPhysVecRegs = opts.numPhysVecRegs
+        self.numROBEntries = opts.numROBEntries
+        self.renameToIEWDelay = opts.renameToIEWDelay
 
-        self.backComSize    = opts.backComSize
+        self.backComSize = opts.backComSize
         self.forwardComSize = opts.forwardComSize

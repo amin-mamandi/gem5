@@ -40,13 +40,15 @@
 # Authors: Lisa Hsu
 
 import os
-import sys
 import re
-#from os import getcwd
+import sys
 
 import m5
 
 from gem5.modules.options import Options
+
+# from os import getcwd
+
 
 def config_etrace(cpu_cls, cpu_list, options):
     if issubclass(cpu_cls, m5.objects.O3CPU):
@@ -57,9 +59,10 @@ def config_etrace(cpu_cls, cpu_list, options):
             # file names. Set the dependency window size equal to the cpu it
             # is attached to.
             cpu.traceListener = m5.objects.ElasticTrace(
-                                instFetchTraceFile = options.inst_trace_file,
-                                dataDepTraceFile = options.data_trace_file,
-                                depWindowSize = 3 * cpu.numROBEntries)
+                instFetchTraceFile=options.inst_trace_file,
+                dataDepTraceFile=options.data_trace_file,
+                depWindowSize=3 * cpu.numROBEntries,
+            )
             # Make the number of entries in the ROB, LQ and SQ very
             # large so that there are no stalls due to resource
             # limitation as such stalls will get captured in the trace
@@ -69,7 +72,11 @@ def config_etrace(cpu_cls, cpu_list, options):
             cpu.LQEntries = 128
             cpu.SQEntries = 128
     else:
-        m5.util.fatal("%s does not support data dependency tracing. Use a CPU model of type or inherited from O3CPU.", cpu_cls)
+        m5.util.fatal(
+            "%s does not support data dependency tracing. Use a CPU model of type or inherited from O3CPU.",
+            cpu_cls,
+        )
+
 
 def find_checkpoint_dir(options, system):
 
@@ -90,11 +97,13 @@ def find_checkpoint_dir(options, system):
     cpts.sort(key=lambda b: int(b))
     cpt_num = options.checkpoint_restore
     if cpt_num > len(cpts):
-        print('Checkpoint %d not found', cpt_num)
+        print("Checkpoint %d not found", cpt_num)
         sys.exit(1)
 
     cpt_starttick = int(cpts[cpt_num - 1])
-    checkpoint_dir = os.path.join(checkpoint_read_dir, "cpt.%s" % cpts[cpt_num - 1])
+    checkpoint_dir = os.path.join(
+        checkpoint_read_dir, "cpt.%s" % cpts[cpt_num - 1]
+    )
 
     return cpt_starttick, checkpoint_dir
 
@@ -109,28 +118,35 @@ def get_max_tick(options, cpt_starttick):
     maxtick_from_maxtime = m5.MaxTick
     if options.abs_max_tick:
         maxtick_from_abs = options.abs_max_tick
-        #explicit_maxticks += 1
+        # explicit_maxticks += 1
     if options.rel_max_tick:
         maxtick_from_rel = options.rel_max_tick
         if options.checkpoint_restore:
             # NOTE: this may need to be updated if checkpoints ever store
             # the ticks per simulated second
             maxtick_from_rel += cpt_starttick
-            #if options.at_instruction or options.simpoint:
+            # if options.at_instruction or options.simpoint:
             #    m5.util.warn("Relative max tick specified with --at-instruction or" \
             #         " --simpoint\n      These options don't specify the " \
             #         "checkpoint start tick, so assuming\n      you mean " \
             #         "absolute max tick")
-        #explicit_maxticks += 1
+        # explicit_maxticks += 1
     if options.maxtime:
         maxtick_from_maxtime = m5.ticks.fromSeconds(options.maxtime)
-        #explicit_maxticks += 1
-    #if explicit_maxticks > 1:
+        # explicit_maxticks += 1
+    # if explicit_maxticks > 1:
     #    m5.util.warn("Specified multiple of --abs-max-tick, --rel-max-tick, --maxtime. Using least")
     maxtick = min([maxtick_from_abs, maxtick_from_rel, maxtick_from_maxtime])
 
-    if options.simulation.checkpoint.restore != None and maxtick < cpt_starttick:
-        print("Bad maxtick (%d) specified: Checkpoint starts starts from tick: %d", maxtick, cpt_starttick)
+    if (
+        options.simulation.checkpoint.restore != None
+        and maxtick < cpt_starttick
+    ):
+        print(
+            "Bad maxtick (%d) specified: Checkpoint starts starts from tick: %d",
+            maxtick,
+            cpt_starttick,
+        )
         sys.exit(1)
 
     return maxtick
@@ -144,16 +160,16 @@ def Simulation(root, testsys, options: Options):
         print("main class=", options.architecture.cpu.main_class)
         switch_cpus = [
             options.architecture.cpu.main_class(
-                options.architecture.cpu,
-                switched_out=True,
-                cpu_id=i) for i in range(np)
-            ]
+                options.architecture.cpu, switched_out=True, cpu_id=i
+            )
+            for i in range(np)
+        ]
 
         for i in range(np):
             print(f"proc: {i}")
-            #if options.fast_forward:
+            # if options.fast_forward:
             #    testsys.cpu[i].max_insts_any_thread = int(options.fast_forward)
-            switch_cpus[i].system   = testsys
+            switch_cpus[i].system = testsys
             switch_cpus[i].workload = testsys.cpu[i].workload
             switch_cpus[i].clk_domain = testsys.cpu[i].clk_domain
             switch_cpus[i].progress_interval = testsys.cpu[i].progress_interval
@@ -165,11 +181,13 @@ def Simulation(root, testsys, options: Options):
     else:
         print("No main class=", options.architecture.cpu.main_class)
 
-    checkpoint_read_dir  = None
+    checkpoint_read_dir = None
     checkpoint_write_dir = options.checkpoint_directory
     cpt_starttick = 0
     if options.checkpoint_restore:
-        cpt_starttick, checkpoint_read_dir = find_checkpoint_dir(options, testsys)
+        cpt_starttick, checkpoint_read_dir = find_checkpoint_dir(
+            options, testsys
+        )
 
     # Three ways to run simulations
     # 1. --checkpoint-mode: Create checkpoint within simulated application (ROI) - runs in atomic to completion
@@ -208,19 +226,20 @@ def Simulation(root, testsys, options: Options):
         # switch cpus
         print("Switch CPUs")
         m5.switchCpus(testsys, switch_cpu_list)
-        #simulate
+        # simulate
         print("m5.simulate")
         exit_event = m5.simulate(maxtick - m5.curTick())
         exit_cause = exit_event.getCause()
 
-
     num_checkpoints = 0
     while exit_cause == "checkpoint":
         if not options.checkpoint_mode:
-            print("Error: Trying to write checkpoint but not in checkpoint mode")
+            print(
+                "Error: Trying to write checkpoint but not in checkpoint mode"
+            )
             return
 
-        print("Writing checkpoint {}".format(num_checkpoints))
+        print(f"Writing checkpoint {num_checkpoints}")
         m5.checkpoint(os.path.join(checkpoint_write_dir, "cpt.%d"))
         num_checkpoints += 1
 
@@ -231,7 +250,10 @@ def Simulation(root, testsys, options: Options):
         exit_event = m5.simulate(maxtick - m5.curTick())
         exit_cause = exit_event.getCause()
 
-        print('Exiting @ tick %i because %s' % (m5.curTick(), exit_event.getCause()))
+        print(
+            "Exiting @ tick %i because %s"
+            % (m5.curTick(), exit_event.getCause())
+        )
 
     if options.simulation.checkpoint.checkpoint_at_end:
         print("Writing final checkpoint")

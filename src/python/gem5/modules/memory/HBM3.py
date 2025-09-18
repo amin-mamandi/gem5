@@ -44,14 +44,14 @@
 #          Matthias Jung
 #          Erfan Azarkhish
 
-from gem5.modules import util
-
 import m5
 
+from gem5.modules import util
 
 # Note: Following parameters taken from the
 # gem5-X open source framework. See:
 # https://github.com/esl-epfl/gem5-X/blob/2dbcef7ea088f0c4015928044e3346a62ccef5c9/src/mem/DRAMCtrl.py
+
 
 # A single HBM3 x128 interface (one command and address bus), with
 # Assuming 6.4 Gbps/pin from JEDEC spec
@@ -67,9 +67,9 @@ class HBM3_6400_4H_1x128(m5.objects.DRAMInterface):
 
     # size of channel in bytes, 4H stack of 2Gb dies is 1GB per stack;
     # with 8 channels, 128MB per channel
-    device_size = '128MB'
+    device_size = "128MB"
 
-    device_rowbuffer_size = '2kB'
+    device_rowbuffer_size = "2kB"
 
     # 1x128 configuration
     devices_per_rank = 1
@@ -88,28 +88,28 @@ class HBM3_6400_4H_1x128(m5.objects.DRAMInterface):
     # setting bank_groups_per_rank to 0 to disable until range is defined
     bank_groups_per_rank = 4
 
-    tCK = '0.625ns'
+    tCK = "0.625ns"
 
-    # Page 59: example 1 
+    # Page 59: example 1
     # might need to be lower, in the example
     # tCK = 0.7 ns (half of ours)
     # tRCD =? tRAS/2?
-    tRP = '15ns'
-    tRAS = '33ns'
-    tRCD = '16.5ns'
-    tCL = '11ns'
+    tRP = "15ns"
+    tRAS = "33ns"
+    tRCD = "16.5ns"
+    tCL = "11ns"
 
     # BL2 and BL4 supported, default to BL4
     # DDR @ 3200MHz means 4 * 0.625ns = ns
-    tBURST = '1ns'
-    tCCD_L = '1.5ns'
-    tCCD_L_WR = '1.5'
+    tBURST = "1ns"
+    tCCD_L = "1.5ns"
+    tCCD_L_WR = "1.5"
 
     # value for 2Gb device from JEDEC spec
-    tRFC = '200ns'
+    tRFC = "200ns"
 
     # value for 2Gb device from JEDEC spec
-    tREFI = '3.9us'
+    tREFI = "3.9us"
 
     #
     #
@@ -119,34 +119,35 @@ class HBM3_6400_4H_1x128(m5.objects.DRAMInterface):
     #
     #
     #
-    
+
     # extrapolate the following from LPDDR configs, using ns values
     # to minimize burst length, prefetch differences
-    tWR = '8ns'
-    tRTP = '3.5ns'
-    tWTR = '3ns'
+    tWR = "8ns"
+    tRTP = "3.5ns"
+    tWTR = "3ns"
 
     # start with 2 cycles turnaround, similar to other memory classes
     # could be more with variations across the stack
-    tRTW = '1.666ns'
+    tRTW = "1.666ns"
 
     # single rank device, set to 0
-    tCS = '0ns'
+    tCS = "0ns"
 
     # from MemCon example, tRRD is 4ns with 2ns tCK
-    tRRD = '1.666ns'
-    tRRD_L = '1.666ns'
+    tRRD = "1.666ns"
+    tRRD_L = "1.666ns"
 
     # from MemCon example, tFAW is 30ns with 2ns tCK
-    tXAW = '12.5ns'
+    tXAW = "12.5ns"
     activation_limit = 4
 
     # 4tCK
-    tXP = '3.332ns'
+    tXP = "3.332ns"
 
     # start with tRFC + tXP -> 160ns + 8ns = 168ns
-    tXS = '160ns'
+    tXS = "160ns"
+
 
 class HBM3(HBM3_6400_4H_1x128):
     def __init__(self, options, **kwargs):
-        super(HBM3, self).__init__(**kwargs)
+        super().__init__(**kwargs)

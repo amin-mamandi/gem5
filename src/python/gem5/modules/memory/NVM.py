@@ -36,6 +36,7 @@
 # [lnghrdntcr]: Taken from gem5@epi juelich repo, commit 21dec619a88459b80df34c563b33216167d93a49
 import m5
 
+
 # NVM delays and device architecture defined to mimic PCM like memory.
 # Can be configured with DDR4_2400 sharing the channel
 class NVM_2400_1x64(m5.objects.NVMInterface):
@@ -45,10 +46,10 @@ class NVM_2400_1x64(m5.objects.NVMInterface):
     max_pending_writes = 128
     max_pending_reads = 64
 
-    device_rowbuffer_size = '256B'
+    device_rowbuffer_size = "256B"
 
     # 8X capacity compared to DDR4 x4 DIMM with 8Gb devices
-    device_size = '512GiB'
+    device_size = "512GiB"
     # Mimic 64-bit media agnostic DIMM interface
     device_bus_width = 64
     devices_per_rank = 1
@@ -60,19 +61,20 @@ class NVM_2400_1x64(m5.objects.NVMInterface):
     two_cycle_rdwr = True
 
     # 1200 MHz
-    tCK = '0.833ns'
+    tCK = "0.833ns"
 
-    tREAD = '150ns'
-    tWRITE = '500ns';
-    tSEND = '14.16ns';
-    tBURST = '3.332ns';
+    tREAD = "150ns"
+    tWRITE = "500ns"
+    tSEND = "14.16ns"
+    tBURST = "3.332ns"
 
     # Default all bus turnaround and rank bus delay to 2 cycles
     # With DDR data bus, clock = 1200 MHz = 1.666 ns
-    tWTR = '1.666ns';
-    tRTW = '1.666ns';
-    tCS = '1.666ns'
+    tWTR = "1.666ns"
+    tRTW = "1.666ns"
+    tCS = "1.666ns"
 
-class NVM(NVM_2400_1x64): 
+
+class NVM(NVM_2400_1x64):
     def __init__(self, options, **kwargs):
-        super(NVM, self).__init__(**kwargs)
+        super().__init__(**kwargs)
