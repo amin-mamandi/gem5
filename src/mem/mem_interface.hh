@@ -216,6 +216,13 @@ class MemInterface : public AbstractMemory
      */
     uint8_t pseudoChannel;
 
+    /**
+     * Accessors for topology information needed by the controller.
+     */
+    uint32_t getRanksPerChannel() const { return ranksPerChannel; }
+    uint32_t getBanksPerRank() const { return banksPerRank; }
+    uint32_t getTotalBanks() const { return ranksPerChannel * banksPerRank; }
+
     /** Set a pointer to the controller and initialize
      * interface based on controller parameters
      * @param _ctrl pointer to the parent controller

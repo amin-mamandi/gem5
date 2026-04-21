@@ -46,6 +46,7 @@
 #include "debug/DRAM.hh"
 #include "debug/DRAMPower.hh"
 #include "debug/DRAMState.hh"
+#include "sim/core.hh"
 #include "sim/system.hh"
 
 namespace gem5
@@ -210,6 +211,12 @@ DRAMInterface::activateBank(Rank& rank_ref, Bank& bank_ref,
     DPRINTF(DRAMPower, "%llu,ACT,%d,%d\n", divCeil(act_at, tCK) -
             timeStampOffset, bank_ref.bank, rank_ref.rank);
 
+    stats.actCmds++;
+    const uint32_t bank_id = rank_ref.rank * banksPerRank + bank_ref.bank;
+    if (bank_id < stats.perBankActCmds.size()) {
+        stats.perBankActCmds[bank_id]++;
+    }
+
     // The next access has to respect tRAS for this bank
     bank_ref.preAllowedAt = act_at + tRAS;
 
@@ -326,6 +333,12 @@ DRAMInterface::prechargeBank(Rank& rank_ref, Bank& bank, Tick pre_tick,
                                    pre_at));
         DPRINTF(DRAMPower, "%llu,PRE,%d,%d\n", divCeil(pre_at, tCK) -
                 timeStampOffset, bank.bank, rank_ref.rank);
+    }
+
+    stats.preCmds++;
+    const uint32_t bank_id = rank_ref.rank * banksPerRank + bank.bank;
+    if (bank_id < stats.perBankPreCmds.size()) {
+        stats.perBankPreCmds[bank_id]++;
     }
 
     // if we look at the current number of active banks we might be
@@ -581,6 +594,10 @@ DRAMInterface::doBurstAccess(MemPacket* mem_pkt, Tick next_burst_at,
             stats.readRowHits++;
         stats.dramBytesRead += burstSize;
         stats.perBankRdBursts[mem_pkt->bankId]++;
+        stats.perBankRdQLat[mem_pkt->bankId] += cmd_at - mem_pkt->entryTime;
+        if (row_hit) {
+            stats.perBankRdRowHits[mem_pkt->bankId]++;
+        }
 
         // Update latency stats
         stats.totMemAccLat += mem_pkt->readyTime - mem_pkt->entryTime;
@@ -610,6 +627,10 @@ DRAMInterface::doBurstAccess(MemPacket* mem_pkt, Tick next_burst_at,
             stats.writeRowHits++;
         stats.dramBytesWritten += burstSize;
         stats.perBankWrBursts[mem_pkt->bankId]++;
+        stats.perBankWrQLat[mem_pkt->bankId] += cmd_at - mem_pkt->entryTime;
+        if (row_hit) {
+            stats.perBankWrRowHits[mem_pkt->bankId]++;
+        }
 
     }
     // Update bus state to reflect when previous command was issued
@@ -1855,6 +1876,23 @@ DRAMInterface::DRAMStats::DRAMStats(DRAMInterface &_dram)
              "Per bank write bursts"),
     ADD_STAT(perBankWrBursts, statistics::units::Count::get(),
              "Per bank write bursts"),
+    ADD_STAT(perBankActCmds, statistics::units::Count::get(),
+             "Per bank ACT commands"),
+    ADD_STAT(perBankPreCmds, statistics::units::Count::get(),
+             "Per bank PRE commands"),
+    ADD_STAT(perBankRdQLat, statistics::units::Tick::get(),
+             "Per bank total read queueing latency"),
+    ADD_STAT(perBankWrQLat, statistics::units::Tick::get(),
+             "Per bank total write queueing latency"),
+    ADD_STAT(perBankRdRowHits, statistics::units::Count::get(),
+             "Per bank read row hits"),
+    ADD_STAT(perBankWrRowHits, statistics::units::Count::get(),
+             "Per bank write row hits"),
+
+    ADD_STAT(actCmds, statistics::units::Count::get(),
+             "ACT command count"),
+    ADD_STAT(preCmds, statistics::units::Count::get(),
+             "PRE command count"),
 
     ADD_STAT(totQLat, statistics::units::Tick::get(),
              "Total ticks spent queuing"),
@@ -1882,6 +1920,16 @@ DRAMInterface::DRAMStats::DRAMStats(DRAMInterface &_dram)
              "Row buffer hit rate for reads"),
     ADD_STAT(writeRowHitRate, statistics::units::Ratio::get(),
              "Row buffer hit rate for writes"),
+    ADD_STAT(perBankRdRowHitRate, statistics::units::Ratio::get(),
+             "Per bank read row hit rate"),
+    ADD_STAT(perBankWrRowHitRate, statistics::units::Ratio::get(),
+             "Per bank write row hit rate"),
+    ADD_STAT(perBankRdAvgQLat, statistics::units::Rate<
+                statistics::units::Tick, statistics::units::Count>::get(),
+             "Per bank average read queueing latency"),
+    ADD_STAT(perBankWrAvgQLat, statistics::units::Rate<
+                statistics::units::Tick, statistics::units::Count>::get(),
+             "Per bank average write queueing latency"),
 
     ADD_STAT(bytesPerActivate, statistics::units::Byte::get(),
              "Bytes accessed per row activation"),
@@ -1925,8 +1973,26 @@ DRAMInterface::DRAMStats::regStats()
     readRowHitRate.precision(2);
     writeRowHitRate.precision(2);
 
-    perBankRdBursts.init(dram.banksPerRank * dram.ranksPerChannel);
-    perBankWrBursts.init(dram.banksPerRank * dram.ranksPerChannel);
+    const uint32_t total_banks = dram.banksPerRank * dram.ranksPerChannel;
+    perBankRdBursts.init(total_banks);
+    perBankWrBursts.init(total_banks);
+    perBankActCmds.init(total_banks);
+    perBankPreCmds.init(total_banks);
+    perBankRdQLat.init(total_banks);
+    perBankWrQLat.init(total_banks);
+    perBankRdRowHits.init(total_banks);
+    perBankWrRowHits.init(total_banks);
+    for (uint32_t i = 0; i < total_banks; ++i) {
+        const std::string bank_name = "bank" + std::to_string(i);
+        perBankRdBursts.subname(i, bank_name);
+        perBankWrBursts.subname(i, bank_name);
+        perBankActCmds.subname(i, bank_name);
+        perBankPreCmds.subname(i, bank_name);
+        perBankRdQLat.subname(i, bank_name);
+        perBankWrQLat.subname(i, bank_name);
+        perBankRdRowHits.subname(i, bank_name);
+        perBankWrRowHits.subname(i, bank_name);
+    }
 
     bytesPerActivate
         .init(dram.maxAccessesPerRow ?
@@ -1947,6 +2013,10 @@ DRAMInterface::DRAMStats::regStats()
 
     readRowHitRate = (readRowHits / readBursts) * 100;
     writeRowHitRate = (writeRowHits / writeBursts) * 100;
+    perBankRdRowHitRate = (perBankRdRowHits / perBankRdBursts) * 100;
+    perBankWrRowHitRate = (perBankWrRowHits / perBankWrBursts) * 100;
+    perBankRdAvgQLat = perBankRdQLat / perBankRdBursts;
+    perBankWrAvgQLat = perBankWrQLat / perBankWrBursts;
 
     avgRdBW = (dramBytesRead / 1000000) / simSeconds;
     avgWrBW = (dramBytesWritten / 1000000) / simSeconds;

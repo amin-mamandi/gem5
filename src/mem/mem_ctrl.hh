@@ -48,6 +48,7 @@
 
 #include <deque>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -110,6 +111,9 @@ class MemPacket
 
     /** RequestorID associated with the packet */
     const RequestorID _requestorId;
+
+    /** Original requestor ID metadata associated with the packet */
+    const RequestorID _sourceRequestorId;
 
     const bool read;
 
@@ -175,6 +179,12 @@ class MemPacket
     inline RequestorID requestorId() const { return _requestorId; }
 
     /**
+     * Get the packet original RequestorID metadata
+     * (interface compatibility with Packet)
+     */
+    inline RequestorID sourceRequestorId() const { return _sourceRequestorId; }
+
+    /**
      * Get the packet size
      * (interface compatibility with Packet)
      */
@@ -206,8 +216,9 @@ class MemPacket
     MemPacket(PacketPtr _pkt, bool is_read, bool is_dram, uint8_t _channel,
                uint8_t _rank, uint8_t _bank, uint32_t _row, uint16_t bank_id,
                Addr _addr, unsigned int _size)
-        : entryTime(curTick()), readyTime(curTick()), pkt(_pkt),
+    : entryTime(curTick()), readyTime(curTick()), pkt(_pkt),
           _requestorId(pkt->requestorId()),
+          _sourceRequestorId(pkt->sourceRequestorId()),
           read(is_read), dram(is_dram), pseudoChannel(_channel), rank(_rank),
           bank(_bank), row(_row), bankId(bank_id), addr(_addr), size(_size),
           burstHelper(NULL), _qosValue(_pkt->qosValue())
@@ -433,6 +444,17 @@ class MemCtrl : public qos::MemCtrl
                     MemInterface* mem_intr);
 
     /**
+     * For RR policy, pick one ready candidate per bank and schedule banks in
+     * round-robin order.
+     *
+     * @param queue Queued requests to consider
+     * @param mem_intr the memory interface to choose from
+     * @return an iterator to the selected packet, else queue.end()
+     */
+    virtual MemPacketQueue::iterator
+    chooseNextRR(MemPacketQueue& queue, MemInterface* mem_intr);
+
+    /**
      * Calculate burst window aligned tick
      *
      * @param cmd_tick Initial tick of command
@@ -499,8 +521,13 @@ class MemCtrl : public qos::MemCtrl
     std::unordered_multiset<Tick> burstTicks;
 
     /**
-+    * Create pointer to interface of the actual memory media when connected
-+    */
+     * Per queue round-robin bank cursor used by chooseNextRR.
+     */
+    std::unordered_map<const MemPacketQueue*, size_t> rrQueueNextIdx;
+
+    /**
+     * Create pointer to interface of the actual memory media when connected
+     */
     MemInterface* dram;
 
     virtual AddrRangeList getAddrRanges();
@@ -517,6 +544,16 @@ class MemCtrl : public qos::MemCtrl
     uint32_t writeLowThreshold;
     const uint32_t minWritesPerSwitch;
     const uint32_t minReadsPerSwitch;
+    /**
+     * Per-bank read-queue occupancy.
+     */
+    std::vector<uint32_t> readQueueSizePerBank;
+
+    /**
+     * Per-bank write-queue occupancy.
+     */
+    std::vector<uint32_t> writeQueueSizePerBank;
+
 
     /**
      * Memory controller configuration initialized based on parameter
@@ -617,6 +654,11 @@ class MemCtrl : public qos::MemCtrl
         // per-requestor raed and write average memory access latency
         statistics::Formula requestorReadAvgLat;
         statistics::Formula requestorWriteAvgLat;
+
+        /** Average read-queue occupancy per bank */
+        statistics::AverageVector rdQPerBankOcc;
+        /** Average write-queue occupancy per bank */
+        statistics::AverageVector wrQPerBankOcc;
     };
 
     CtrlStats stats;
@@ -676,6 +718,9 @@ class MemCtrl : public qos::MemCtrl
   public:
 
     MemCtrl(const MemCtrlParams &p);
+
+    uint32_t getReadQueueSizeForBank(uint32_t bank) const;
+    uint32_t getWriteQueueSizeForBank(uint32_t bank) const;
 
     /**
      * Ensure that all interfaced have drained commands

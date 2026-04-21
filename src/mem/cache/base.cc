@@ -1718,6 +1718,7 @@ BaseCache::writebackBlk(CacheBlk *blk)
 
     RequestPtr req = std::make_shared<Request>(
         regenerateBlkAddr(blk), blkSize, 0, Request::wbRequestorId);
+    req->sourceRequestorId(blk->getSrcRequestorId());
 
     if (blk->isSecure())
         req->setFlags(Request::SECURE);
@@ -1761,6 +1762,7 @@ BaseCache::writecleanBlk(CacheBlk *blk, Request::Flags dest, PacketId id)
 {
     RequestPtr req = std::make_shared<Request>(
         regenerateBlkAddr(blk), blkSize, 0, Request::wbRequestorId);
+    req->sourceRequestorId(blk->getSrcRequestorId());
 
     if (blk->isSecure()) {
         req->setFlags(Request::SECURE);
@@ -1835,6 +1837,7 @@ BaseCache::writebackVisitor(CacheBlk &blk)
 
         RequestPtr request = std::make_shared<Request>(
             regenerateBlkAddr(&blk), blkSize, 0, Request::funcRequestorId);
+        request->sourceRequestorId(blk.getSrcRequestorId());
 
         request->taskId(blk.getTaskId());
         if (blk.isSecure()) {

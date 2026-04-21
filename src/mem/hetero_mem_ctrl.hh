@@ -67,6 +67,8 @@ class HeteroMemCtrl : public MemCtrl
     virtual std::pair<MemPacketQueue::iterator, Tick>
     chooseNextFRFCFS(MemPacketQueue& queue, Tick extra_col_delay,
                     MemInterface* mem_intr) override;
+    MemPacketQueue::iterator
+    chooseNextRR(MemPacketQueue& queue, MemInterface* mem_intr) override;
     Tick doBurstAccess(MemPacket* mem_pkt, MemInterface* mem_int) override;
     Tick minReadToWriteDataGap() override;
     Tick minWriteToReadDataGap() override;

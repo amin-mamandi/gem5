@@ -47,7 +47,7 @@ from m5.proxy import *
 # Enum for memory scheduling algorithms, currently First-Come
 # First-Served and a First-Row Hit then First-Come First-Served
 class MemSched(Enum):
-    vals = ["fcfs", "frfcfs"]
+    vals = ["fcfs", "frfcfs", "rr"]
 
 
 # MemCtrl is a single-channel single-ported Memory controller model

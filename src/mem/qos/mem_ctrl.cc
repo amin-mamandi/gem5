@@ -233,7 +233,9 @@ MemCtrl::schedule(const PacketPtr pkt)
     assert(pkt->req);
 
     if (policy) {
-        return schedule(pkt->req->requestorId(), pkt->getSize());
+        const RequestorID rid = pkt->isWrite() ?
+            pkt->sourceRequestorId() : pkt->requestorId();
+        return schedule(rid, pkt->getSize());
     } else {
         DPRINTF(QOS, "qos::MemCtrl::schedule Packet received [Qv %d], "
                 "but QoS scheduler not initialized\n",

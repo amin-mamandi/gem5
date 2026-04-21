@@ -403,6 +403,12 @@ class Request : public Extensible<Request>
      */
     RequestorID _requestorId = invldRequestorId;
 
+    /**
+     * Original requestor ID metadata. This can differ from _requestorId for
+     * transformed packets (e.g., writebacks).
+     */
+    RequestorID _sourceRequestorId = invldRequestorId;
+
     /** Flag structure for the request. */
     Flags _flags;
 
@@ -490,7 +496,8 @@ class Request : public Extensible<Request>
      * These fields are adequate to perform a request.
      */
     Request(Addr paddr, unsigned size, Flags flags, RequestorID id) :
-        _paddr(paddr), _size(size), _requestorId(id), _time(curTick())
+        _paddr(paddr), _size(size), _requestorId(id),
+        _sourceRequestorId(id), _time(curTick())
     {
         _flags.set(flags);
         privateFlags.set(VALID_PADDR|VALID_SIZE);
@@ -513,6 +520,7 @@ class Request : public Extensible<Request>
           _paddr(other._paddr), _size(other._size),
           _byteEnable(other._byteEnable),
           _requestorId(other._requestorId),
+          _sourceRequestorId(other._sourceRequestorId),
           _flags(other._flags),
           _cacheCoherenceFlags(other._cacheCoherenceFlags),
           privateFlags(other.privateFlags),
@@ -540,6 +548,7 @@ class Request : public Extensible<Request>
         auto mgmt_req = std::make_shared<Request>();
         mgmt_req->_flags.set(flags);
         mgmt_req->_requestorId = id;
+        mgmt_req->_sourceRequestorId = id;
         mgmt_req->_time = curTick();
 
         assert(mgmt_req->isMemMgmt());
@@ -582,6 +591,7 @@ class Request : public Extensible<Request>
         _vaddr = vaddr;
         _size = size;
         _requestorId = id;
+        _sourceRequestorId = id;
         _pc = pc;
         _time = curTick();
 
@@ -862,6 +872,20 @@ class Request : public Extensible<Request>
     requestorId(RequestorID rid)
     {
         _requestorId = rid;
+    }
+
+    /** Accessor for original requestor ID metadata. */
+    RequestorID
+    sourceRequestorId() const
+    {
+        return _sourceRequestorId == invldRequestorId ?
+               _requestorId : _sourceRequestorId;
+    }
+
+    void
+    sourceRequestorId(RequestorID rid)
+    {
+        _sourceRequestorId = rid;
     }
 
     uint32_t
