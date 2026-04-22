@@ -46,6 +46,7 @@
 #include "base/trace.hh"
 #include "debug/DRAM.hh"
 #include "debug/Drain.hh"
+#include "debug/FRFCFS.hh"
 #include "debug/MemCtrl.hh"
 #include "debug/NVM.hh"
 #include "debug/QOS.hh"
@@ -98,20 +99,6 @@ MemCtrl::MemCtrl(const MemCtrlParams &p) :
     if (p.disable_sanity_check) {
         port.disableSanityCheck();
     }
-}
-
-uint32_t
-MemCtrl::getReadQueueSizeForBank(uint32_t bank) const
-{
-    return bank < writeQueueSizePerBank.size() ?
-        writeQueueSizePerBank[bank] : 0;
-}
-
-uint32_t
-MemCtrl::getWriteQueueSizeForBank(uint32_t bank) const
-{
-    return bank < writeQueueSizePerBank.size() ?
-        writeQueueSizePerBank[bank] : 0;
 }
 
 void
@@ -295,11 +282,6 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
                        pkt->qosValue(), mem_pkt->addr, 1);
 
             mem_intr->readQueueSize++;
-            if (mem_pkt->bankId < readQueueSizePerBank.size()) {
-                readQueueSizePerBank[mem_pkt->bankId]++;
-                stats.rdQPerBankOcc[mem_pkt->bankId] =
-                    readQueueSizePerBank[mem_pkt->bankId];
-            }
 
             // Update stats
             stats.avgRdQLen = totalReadQueueSize + respQueue.size();
@@ -374,11 +356,6 @@ MemCtrl::addToWriteQueue(PacketPtr pkt, unsigned int pkt_count,
                        pkt->qosValue(), mem_pkt->addr, 1);
 
             mem_intr->writeQueueSize++;
-            if (mem_pkt->bankId < writeQueueSizePerBank.size()) {
-                writeQueueSizePerBank[mem_pkt->bankId]++;
-                stats.wrQPerBankOcc[mem_pkt->bankId] =
-                    writeQueueSizePerBank[mem_pkt->bankId];
-            }
 
             assert(totalWriteQueueSize == isInWriteQueue.size());
 
@@ -651,114 +628,6 @@ MemCtrl::chooseNextFRFCFS(MemPacketQueue& queue, Tick extra_col_delay,
 MemPacketQueue::iterator
 MemCtrl::chooseNextRR(MemPacketQueue& queue, MemInterface* mem_intr)
 {
-    auto &next_idx = rrQueueNextIdx[&queue];
-
-    if (queue.empty()) {
-        DPRINTF(
-            RR,
-            "RR queue empty: next_bank=%llu\n",
-            static_cast<unsigned long long>(next_idx)
-        );
-        return queue.end();
-    }
-
-    const uint32_t total_banks = mem_intr->getTotalBanks();
-    if (total_banks == 0) {
-        DPRINTF(
-            RR,
-            "RR no banks available: queue_size=%llu\n",
-            static_cast<unsigned long long>(queue.size())
-        );
-        return queue.end();
-    }
-
-    next_idx %= total_banks;
-    DPRINTF(
-        RR,
-        "RR start: queue_size=%llu total_banks=%u start_bank=%llu\n",
-        static_cast<unsigned long long>(queue.size()),
-        total_banks,
-        static_cast<unsigned long long>(next_idx)
-    );
-
-    std::vector<MemPacketQueue::iterator> candidate_per_bank(
-        total_banks, queue.end()
-    );
-
-    uint32_t inspected = 0;
-    uint32_t ready_candidates = 0;
-    for (auto it = queue.begin(); it != queue.end(); ++it) {
-        MemPacket* mem_pkt = *it;
-        ++inspected;
-        if (mem_pkt->pseudoChannel != mem_intr->pseudoChannel) {
-            continue;
-        }
-        if (!packetReady(mem_pkt, mem_intr)) {
-            continue;
-        }
-        const uint32_t bank = mem_pkt->bankId;
-        if (bank < total_banks && candidate_per_bank[bank] == queue.end()) {
-            candidate_per_bank[bank] = it;
-            ++ready_candidates;
-            const RequestorID read_req = mem_pkt->isRead() ?
-                mem_pkt->requestorId() : mem_pkt->sourceRequestorId();
-            DPRINTF(
-                RR,
-                "RR candidate: bank=%u row=%u %s req=%u src=%u read_req=%u "
-                "addr=%#llx\n",
-                bank,
-                mem_pkt->row,
-                mem_pkt->isRead() ? "RD" : "WR",
-                mem_pkt->requestorId(),
-                mem_pkt->sourceRequestorId(),
-                read_req,
-                static_cast<unsigned long long>(mem_pkt->addr)
-            );
-        }
-    }
-
-    DPRINTF(
-        RR,
-        "RR scan done: inspected=%u candidate_banks=%u/%u\n",
-        inspected,
-        ready_candidates,
-        total_banks
-    );
-
-    for (uint32_t offset = 0; offset < total_banks; ++offset) {
-        const uint32_t bank = (next_idx + offset) % total_banks;
-        if (candidate_per_bank[bank] != queue.end()) {
-            MemPacket* sel_pkt = *candidate_per_bank[bank];
-            const size_t prev_idx = next_idx;
-            next_idx = (bank + 1) % total_banks;
-            const RequestorID read_req = sel_pkt->isRead() ?
-                sel_pkt->requestorId() : sel_pkt->sourceRequestorId();
-            DPRINTF(
-                RR,
-                "RR select: bank=%u offset=%u rotate=%llu->%llu row=%u "
-                "%s req=%u src=%u read_req=%u addr=%#llx\n",
-                bank,
-                offset,
-                static_cast<unsigned long long>(prev_idx),
-                static_cast<unsigned long long>(next_idx),
-                sel_pkt->row,
-                sel_pkt->isRead() ? "RD" : "WR",
-                sel_pkt->requestorId(),
-                sel_pkt->sourceRequestorId(),
-                read_req,
-                static_cast<unsigned long long>(sel_pkt->addr)
-            );
-            return candidate_per_bank[bank];
-        }
-    }
-
-    DPRINTF(
-        RR,
-        "RR no ready candidate: start_bank=%llu queue_size=%llu\n",
-        static_cast<unsigned long long>(next_idx),
-        static_cast<unsigned long long>(queue.size())
-    );
-
     return queue.end();
 }
 
@@ -1067,7 +936,6 @@ MemCtrl::processNextReqEvent(MemInterface* mem_intr,
 
     // updates current state
     mem_intr->busState = mem_intr->busStateNext;
-    this->busState = mem_intr->busState;
 
     nonDetermReads(mem_intr);
 
@@ -1163,11 +1031,6 @@ MemCtrl::processNextReqEvent(MemInterface* mem_intr,
                         mem_pkt->readyTime - mem_pkt->entryTime);
 
             mem_intr->readQueueSize--;
-            if (mem_pkt->bankId < readQueueSizePerBank.size()) {
-                readQueueSizePerBank[mem_pkt->bankId]--;
-                stats.rdQPerBankOcc[mem_pkt->bankId] =
-                    readQueueSizePerBank[mem_pkt->bankId];
-            }
 
             // Insert into response queue. It will be sent back to the
             // requestor at its readyTime
@@ -1204,7 +1067,6 @@ MemCtrl::processNextReqEvent(MemInterface* mem_intr,
         if (switch_to_writes) {
             // transition to writing
             mem_intr->busStateNext = WRITE;
-            this->busStateNext = mem_intr->busStateNext;
         }
     } else {
 
@@ -1259,11 +1121,6 @@ MemCtrl::processNextReqEvent(MemInterface* mem_intr,
                     mem_pkt->readyTime - mem_pkt->entryTime);
 
         mem_intr->writeQueueSize--;
-        if (mem_pkt->bankId < writeQueueSizePerBank.size()) {
-            writeQueueSizePerBank[mem_pkt->bankId]--;
-            stats.wrQPerBankOcc[mem_pkt->bankId] =
-                writeQueueSizePerBank[mem_pkt->bankId];
-        }
 
         // remove the request from the queue - the iterator is no longer valid
         writeQueue[mem_pkt->qosValue()].erase(to_write);
@@ -1286,7 +1143,6 @@ MemCtrl::processNextReqEvent(MemInterface* mem_intr,
 
             // turn the bus back around for reads again
             mem_intr->busStateNext = MemCtrl::READ;
-            this->busStateNext = mem_intr->busStateNext;
 
             // note that the we switch back to reads also in the idle
             // case, which eventually will check for any draining and
@@ -1428,11 +1284,7 @@ MemCtrl::CtrlStats::CtrlStats(MemCtrl &_ctrl)
              "Per-requestor read average memory access latency"),
     ADD_STAT(requestorWriteAvgLat, statistics::units::Rate<
                 statistics::units::Tick, statistics::units::Count>::get(),
-             "Per-requestor write average memory access latency"),
-    ADD_STAT(rdQPerBankOcc, statistics::units::Count::get(),
-             "Average read-queue occupancy per bank"),
-    ADD_STAT(wrQPerBankOcc, statistics::units::Count::get(),
-             "Average write-queue occupancy per bank")
+             "Per-requestor write average memory access latency")
 {
 }
 
@@ -1463,15 +1315,6 @@ MemCtrl::CtrlStats::regStats()
     avgRdBWSys.precision(8);
     avgWrBWSys.precision(8);
     avgGap.precision(2);
-
-    const uint32_t total_banks = ctrl.dram->getTotalBanks();
-    rdQPerBankOcc.init(total_banks);
-    wrQPerBankOcc.init(total_banks);
-    for (uint32_t i = 0; i < total_banks; i++) {
-        const std::string bank_name = "bank" + std::to_string(i);
-        rdQPerBankOcc.subname(i, bank_name);
-        wrQPerBankOcc.subname(i, bank_name);
-    }
 
     // per-requestor bytes read and written to memory
     requestorReadBytes

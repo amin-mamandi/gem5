@@ -216,7 +216,7 @@ class MemPacket
     MemPacket(PacketPtr _pkt, bool is_read, bool is_dram, uint8_t _channel,
                uint8_t _rank, uint8_t _bank, uint32_t _row, uint16_t bank_id,
                Addr _addr, unsigned int _size)
-    : entryTime(curTick()), readyTime(curTick()), pkt(_pkt),
+        : entryTime(curTick()), readyTime(curTick()), pkt(_pkt),
           _requestorId(pkt->requestorId()),
           _sourceRequestorId(pkt->sourceRequestorId()),
           read(is_read), dram(is_dram), pseudoChannel(_channel), rank(_rank),
@@ -544,16 +544,6 @@ class MemCtrl : public qos::MemCtrl
     uint32_t writeLowThreshold;
     const uint32_t minWritesPerSwitch;
     const uint32_t minReadsPerSwitch;
-    /**
-     * Per-bank read-queue occupancy.
-     */
-    std::vector<uint32_t> readQueueSizePerBank;
-
-    /**
-     * Per-bank write-queue occupancy.
-     */
-    std::vector<uint32_t> writeQueueSizePerBank;
-
 
     /**
      * Memory controller configuration initialized based on parameter
@@ -654,11 +644,6 @@ class MemCtrl : public qos::MemCtrl
         // per-requestor raed and write average memory access latency
         statistics::Formula requestorReadAvgLat;
         statistics::Formula requestorWriteAvgLat;
-
-        /** Average read-queue occupancy per bank */
-        statistics::AverageVector rdQPerBankOcc;
-        /** Average write-queue occupancy per bank */
-        statistics::AverageVector wrQPerBankOcc;
     };
 
     CtrlStats stats;
@@ -718,9 +703,6 @@ class MemCtrl : public qos::MemCtrl
   public:
 
     MemCtrl(const MemCtrlParams &p);
-
-    uint32_t getReadQueueSizeForBank(uint32_t bank) const;
-    uint32_t getWriteQueueSizeForBank(uint32_t bank) const;
 
     /**
      * Ensure that all interfaced have drained commands

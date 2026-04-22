@@ -33,7 +33,6 @@ from m5.objects import (
     L2XBar,
     Port,
     SystemXBar,
-    WriteAllocator,
 )
 
 from ....isas import ISA
@@ -81,11 +80,6 @@ class PrivateL1SharedL2CacheHierarchy(
         l1i_assoc: int = 8,
         l2_assoc: int = 16,
         membus: Optional[BaseXBar] = None,
-        l1d_write_allocator: bool = False,
-        l2_write_allocator: bool = False,
-        write_allocator_coalesce_limit: int = 2,
-        write_allocator_no_allocate_limit: int = 12,
-        write_allocator_delay_threshold: int = 8,
     ) -> None:
         """
         :param l1d_size: The size of the L1 Data Cache (e.g., "32KiB").
@@ -97,15 +91,6 @@ class PrivateL1SharedL2CacheHierarchy(
         :param membus: The memory bus. This parameter is optional parameter and
                        will default to a 64 bit width SystemXBar is not
                        specified.
-        :param l1d_write_allocator: Enable WriteAllocator on each L1D cache.
-        :param l2_write_allocator: Enable WriteAllocator on the shared L2.
-        :param write_allocator_coalesce_limit: Consecutive lines written
-                                               before delaying for coalescing.
-        :param write_allocator_no_allocate_limit: Consecutive lines written
-                                                  before switching to
-                                                  write-no-allocate.
-        :param write_allocator_delay_threshold: Delay quanta used to allow
-                                               coalescing.
         """
 
         AbstractClassicCacheHierarchy.__init__(self=self)
@@ -120,13 +105,6 @@ class PrivateL1SharedL2CacheHierarchy(
         )
 
         self.membus = membus if membus else self._get_default_membus()
-        self._l1d_write_allocator = l1d_write_allocator
-        self._l2_write_allocator = l2_write_allocator
-        self._write_allocator_coalesce_limit = write_allocator_coalesce_limit
-        self._write_allocator_no_allocate_limit = (
-            write_allocator_no_allocate_limit
-        )
-        self._write_allocator_delay_threshold = write_allocator_delay_threshold
 
     @overrides(AbstractClassicCacheHierarchy)
     def get_mem_side_port(self) -> Port:
@@ -156,21 +134,8 @@ class PrivateL1SharedL2CacheHierarchy(
             L1DCache(size=self._l1d_size, assoc=self._l1d_assoc)
             for i in range(board.get_processor().get_num_cores())
         ]
-        if self._l1d_write_allocator:
-            for l1d in self.l1dcaches:
-                l1d.write_allocator = WriteAllocator(
-                    coalesce_limit=self._write_allocator_coalesce_limit,
-                    no_allocate_limit=self._write_allocator_no_allocate_limit,
-                    delay_threshold=self._write_allocator_delay_threshold,
-                )
         self.l2bus = L2XBar()
         self.l2cache = L2Cache(size=self._l2_size, assoc=self._l2_assoc)
-        if self._l2_write_allocator:
-            self.l2cache.write_allocator = WriteAllocator(
-                coalesce_limit=self._write_allocator_coalesce_limit,
-                no_allocate_limit=self._write_allocator_no_allocate_limit,
-                delay_threshold=self._write_allocator_delay_threshold,
-            )
         # ITLB Page walk caches
         self.iptw_caches = [
             MMUCache(size="8KiB", writeback_clean=False)

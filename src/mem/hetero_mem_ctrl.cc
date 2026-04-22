@@ -281,54 +281,6 @@ HeteroMemCtrl::chooseNextRR(MemPacketQueue& queue, MemInterface* mem_intr)
     if (queue.empty()) {
         return queue.end();
     }
-
-    const uint32_t dram_banks = dram->getTotalBanks();
-    const uint32_t nvm_banks = nvm->getTotalBanks();
-    const uint32_t total_banks = dram_banks + nvm_banks;
-    if (total_banks == 0) {
-        return queue.end();
-    }
-
-    std::vector<MemPacketQueue::iterator> candidate_per_bank(
-        total_banks, queue.end()
-    );
-
-    for (auto it = queue.begin(); it != queue.end(); ++it) {
-        MemPacket* mem_pkt = *it;
-        if (mem_pkt->pseudoChannel != mem_intr->pseudoChannel) {
-            continue;
-        }
-
-        MemInterface* pkt_intr = mem_pkt->isDram() ?
-            static_cast<MemInterface*>(dram) :
-            static_cast<MemInterface*>(nvm);
-        if (!packetReady(mem_pkt, pkt_intr)) {
-            continue;
-        }
-
-        const uint32_t bank = mem_pkt->bankId;
-        if (mem_pkt->isDram()) {
-            if (bank < dram_banks && candidate_per_bank[bank] == queue.end()) {
-                candidate_per_bank[bank] = it;
-            }
-        } else {
-            const uint32_t vbank = dram_banks + bank;
-            if (bank < nvm_banks && candidate_per_bank[vbank] == queue.end()) {
-                candidate_per_bank[vbank] = it;
-            }
-        }
-    }
-
-    auto &next_idx = rrQueueNextIdx[&queue];
-    next_idx %= total_banks;
-    for (uint32_t offset = 0; offset < total_banks; ++offset) {
-        const uint32_t vbank = (next_idx + offset) % total_banks;
-        if (candidate_per_bank[vbank] != queue.end()) {
-            next_idx = (vbank + 1) % total_banks;
-            return candidate_per_bank[vbank];
-        }
-    }
-
     return queue.end();
 }
 

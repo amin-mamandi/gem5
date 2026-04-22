@@ -596,16 +596,6 @@ class DRAMInterface : public MemInterface
         /** DRAM per bank stats */
         statistics::Vector perBankRdBursts;
         statistics::Vector perBankWrBursts;
-        statistics::Vector perBankActCmds;
-        statistics::Vector perBankPreCmds;
-        statistics::Vector perBankRdQLat;
-        statistics::Vector perBankWrQLat;
-        statistics::Vector perBankRdRowHits;
-        statistics::Vector perBankWrRowHits;
-
-        /** DRAM command counts */
-        statistics::Scalar actCmds;
-        statistics::Scalar preCmds;
 
         // Latencies summed over all requests
         statistics::Scalar totQLat;
@@ -622,10 +612,6 @@ class DRAMInterface : public MemInterface
         statistics::Scalar writeRowHits;
         statistics::Formula readRowHitRate;
         statistics::Formula writeRowHitRate;
-        statistics::Formula perBankRdRowHitRate;
-        statistics::Formula perBankWrRowHitRate;
-        statistics::Formula perBankRdAvgQLat;
-        statistics::Formula perBankWrAvgQLat;
         statistics::Histogram bytesPerActivate;
         // Number of bytes transferred to/from DRAM
         statistics::Scalar dramBytesRead;
