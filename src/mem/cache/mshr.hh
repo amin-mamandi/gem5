@@ -118,6 +118,9 @@ class MSHR : public QueueEntry, public Printable
     /** Did we snoop a read while waiting for data? */
     bool postDowngrade;
 
+    /** Tick when this MSHR was first allocated (for miss-latency gating). */
+    Tick allocTick;
+
   public:
 
     /** Track if we sent this as a whole line write or not */
@@ -390,8 +393,20 @@ class MSHR : public QueueEntry, public Printable
      */
     Iterator allocIter;
 
+
     /** List of all requests that match the address */
     TargetList targets;
+
+  public:
+    /** Read-only accessor to the target list (BOOM-style cache uses
+     *  this to count load vs store targets at fill time). */
+    const TargetList& getTargetList() const { return targets; }
+    /** Tick at which this MSHR became ready (proxy for allocation time). */
+    Tick getReadyTime() const { return readyTime; }
+    /** Tick when this MSHR was first allocated. */
+    Tick getAllocTick() const { return allocTick; }
+
+  private:
 
     TargetList deferredTargets;
 

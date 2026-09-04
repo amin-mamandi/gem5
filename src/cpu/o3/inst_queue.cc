@@ -231,6 +231,10 @@ InstructionQueue::InstructionQueue(CPU *cpu_ptr, IEW *iew_ptr,
       iqStats(cpu, totalWidth),
       iqIOStats(cpu)
 {
+    boomLoadWakeupModel = params.boomLoadWakeupModel;
+    loadWakeupCooldown = 0;
+    retryDelayCycles = 0;
+
     const auto &reg_classes = params.isa[0]->regClasses();
     // Set the number of total physical registers
     // As the vector registers have two addressing modes, they are added twice
@@ -858,9 +862,37 @@ InstructionQueue::scheduleReadyInsts()
         addReadyMemInst(mem_inst);
     }
 
+    // Per-blocked-load retry delay countdown (BOOM nack-retry port
+    // contention model, lsu.scala:574-585).
+    if (retryDelayCycles > 0) {
+        --retryDelayCycles;
+    }
+
     // See if any cache blocked instructions are able to be executed
-    while ((mem_inst = getBlockedMemInstToExecute())) {
-        addReadyMemInst(mem_inst);
+    if (retryDelayCycles == 0) {
+        while ((mem_inst = getBlockedMemInstToExecute())) {
+            addReadyMemInst(mem_inst);
+        }
+    }
+
+    // BOOM load wakeup model (lsu.scala:436-451, 584):
+    // AgePriorityEncoder selects the oldest nacked load each cycle for
+    // dcache pipeline re-entry.  Only ONE load wakes up per cycle,
+    // consuming the dcache port (will_fire_load_wakeup, lsu.scala:584).
+    // Without this, all blocked loads drain instantly on cache unblock.
+    if (boomLoadWakeupModel && !blockedMemInsts.empty()) {
+        if (loadWakeupCooldown > 0) {
+            --loadWakeupCooldown;
+        } else {
+            DynInstPtr blocked_inst = std::move(blockedMemInsts.front());
+            blockedMemInsts.pop_front();
+            if (!blocked_inst->isSquashed()) {
+                addReadyMemInst(blocked_inst);
+            }
+            const auto &params =
+                static_cast<const BaseO3CPUParams &>(cpu->params());
+            loadWakeupCooldown = params.boomNackRetryPipelineCycles;
+        }
     }
 
     // Have iterator to head of the list
@@ -927,6 +959,98 @@ InstructionQueue::scheduleReadyInsts()
             }
             if (idx > FUPool::NoFreeFU) {
                 op_latency = fu_pool->getOpLatency(op_class);
+
+                // Data-dependent IntDiv latency matching Rocket-Chip
+                // MulDiv iterative divider (Multiplier.scala) with
+                // divEarlyOut=true.  Latency = req(1) + iters + done(1)
+                // + resp(1) + pipeline_cycles, where
+                // iters = max(1, msb(dividend) - msb(divisor) + 1).
+                if (op_class == IntDivOp && cpu->boomDivEarlyOut
+                    && issuing_inst->staticInst->numSrcRegs() >= 2) {
+                    uint64_t emi = issuing_inst->staticInst->getEMI();
+                    unsigned opcode5 = (emi >> 2) & 0x1F;
+                    unsigned funct3 = (emi >> 12) & 0x7;
+
+                    // W-suffix (32-bit) ops: opcode5=0x0E
+                    unsigned w = (opcode5 == 0x0E) ? 32 : 64;
+                    bool isSigned = (funct3 == 0x4 || funct3 == 0x6);
+
+                    RegVal rs1_raw = issuing_inst->getRegOperand(
+                        issuing_inst->staticInst.get(), 0);
+                    RegVal rs2_raw = issuing_inst->getRegOperand(
+                        issuing_inst->staticInst.get(), 1);
+
+                    // Extract effective values, take abs for signed
+                    uint64_t dividend, divisor;
+                    if (w == 32) {
+                        uint32_t d = static_cast<uint32_t>(rs1_raw);
+                        uint32_t v = static_cast<uint32_t>(rs2_raw);
+                        if (isSigned) {
+                            dividend = (static_cast<int32_t>(d) < 0)
+                                ? (0u - d) : d;
+                            divisor = (static_cast<int32_t>(v) < 0)
+                                ? (0u - v) : v;
+                        } else {
+                            dividend = d;
+                            divisor = v;
+                        }
+                    } else {
+                        if (isSigned) {
+                            dividend = (static_cast<int64_t>(rs1_raw) < 0)
+                                ? (0ULL - rs1_raw) : rs1_raw;
+                            divisor = (static_cast<int64_t>(rs2_raw) < 0)
+                                ? (0ULL - rs2_raw) : rs2_raw;
+                        } else {
+                            dividend = rs1_raw;
+                            divisor = rs2_raw;
+                        }
+                    }
+
+                    // MSB positions (floor(log2(x)), 0 for x==0)
+                    unsigned dividendMSB = (dividend == 0) ? 0
+                        : (63 - __builtin_clzll(dividend));
+                    unsigned divisorMSB = (divisor == 0) ? 0
+                        : (63 - __builtin_clzll(divisor));
+
+                    // Iterations = significant quotient bits.
+                    // Early-out skips leading-zero quotient bits.
+                    unsigned iters;
+                    if (divisor == 0 || dividendMSB < divisorMSB) {
+                        iters = 1;
+                    } else {
+                        iters = dividendMSB - divisorMSB + 1;
+                    }
+
+                    // Total: req(1) + iters + done(1) + resp(1)
+                    unsigned latency = iters + 3;
+
+                    // Signed overhead: +1 neg_inputs, +1 neg_output
+                    if (isSigned) {
+                        bool rs1_neg, rs2_neg;
+                        if (w == 32) {
+                            rs1_neg =
+                                static_cast<int32_t>(rs1_raw) < 0;
+                            rs2_neg =
+                                static_cast<int32_t>(rs2_raw) < 0;
+                        } else {
+                            rs1_neg =
+                                static_cast<int64_t>(rs1_raw) < 0;
+                            rs2_neg =
+                                static_cast<int64_t>(rs2_raw) < 0;
+                        }
+                        if (rs1_neg || rs2_neg)
+                            latency += 1;
+                        bool isRem =
+                            (funct3 == 0x6 || funct3 == 0x7);
+                        bool negOut = isRem ? rs1_neg
+                            : (rs1_neg != rs2_neg);
+                        if (negOut)
+                            latency += 1;
+                    }
+
+                    latency += cpu->boomDivPipelineCycles;
+                    op_latency = Cycles(latency);
+                }
             }
         }
 
@@ -959,8 +1083,21 @@ InstructionQueue::scheduleReadyInsts()
                 auto execution =
                     new FUCompletion(issuing_inst, fu_pool, idx, this);
 
-                cpu->schedule(execution,
-                              cpu->clockEdge(Cycles(op_latency - 1)));
+                // BOOM-faithful iresp port arbitration: if this FU
+                // shares a writeback port with others (irespGroup > 0),
+                // its completion may be pushed back when another FU in
+                // the same group is scheduled to write back the same
+                // cycle.  Models BOOM v3's per-execution-unit iresp
+                // PriorityMux (functional-unit.scala).
+                Tick completion_tick =
+                    cpu->clockEdge(Cycles(op_latency - 1));
+                int iresp_group = fu_pool->getIrespGroup(idx);
+                if (iresp_group > 0) {
+                    completion_tick = fu_pool->reserveIresp(
+                        iresp_group, completion_tick,
+                        (Tick)cpu->clockPeriod());
+                }
+                cpu->schedule(execution, completion_tick);
 
                 if (!pipelined) {
                     // If FU isn't pipelined, then it must be freed
@@ -1241,7 +1378,30 @@ InstructionQueue::cacheUnblocked()
 {
     DPRINTF(IQ, "Cache is unblocked, rescheduling blocked memory "
             "instructions\n");
-    retryMemInsts.splice(retryMemInsts.end(), blockedMemInsts);
+    if (boomLoadWakeupModel) {
+        // BOOM-style: don't drain all blocked loads at once.
+        // scheduleReadyInsts() will pop one from blockedMemInsts per
+        // cycle, matching BOOM's AgePriorityEncoder one-load-per-cycle
+        // wakeup (lsu.scala:436-451, 584).
+    } else if (static_cast<const BaseO3CPUParams &>(cpu->params())
+                       .boomNackRetryLoadExtraCycles > 0 &&
+               !blockedMemInsts.empty()) {
+        if (retryDelayCycles == 0) {
+            constexpr unsigned freeSlots = 3;
+            unsigned nBlocked = blockedMemInsts.size();
+            unsigned contentionLoads =
+                (nBlocked > freeSlots) ? (nBlocked - freeSlots) : 0;
+            const auto &params =
+                static_cast<const BaseO3CPUParams &>(cpu->params());
+            retryDelayCycles =
+                contentionLoads * params.boomNackRetryLoadExtraCycles;
+            if (retryDelayCycles > 5)
+                retryDelayCycles = 5;
+        }
+        retryMemInsts.splice(retryMemInsts.end(), blockedMemInsts);
+    } else {
+        retryMemInsts.splice(retryMemInsts.end(), blockedMemInsts);
+    }
     // Get the CPU ticking again
     cpu->wakeCPU();
 }

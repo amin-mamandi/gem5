@@ -923,9 +923,15 @@ class LSQ
 
     void sendRetryResp();
 
+    /** Increment blocked-load count (called when a load is parked
+     *  because the cache is full). */
+    void incBlockedLoadCount() { _blockedLoadCount++; }
+
   protected:
     /** D-cache is blocked */
     bool _cacheBlocked;
+    /** BOOM one-load-per-cycle wakeup model (lsu.scala:436-451). */
+    bool boomLoadWakeupModel;
     /** The number of cache ports available each cycle (stores only). */
     int cacheStorePorts;
     /** The number of used cache ports in this cycle by stores. */
@@ -934,6 +940,29 @@ class LSQ
     int cacheLoadPorts;
     /** The number of used cache ports in this cycle by loads. */
     int usedLoadPorts;
+
+    /** Count of loads parked (blocked) while cache was full.
+     *  Models BOOM load_wakeup retry queue depth (lsu.scala:548-600). */
+    int _blockedLoadCount;
+
+    /** Accumulates port-cycles consumed by NACKed-load retries while
+     *  cache is blocked.  In BOOM, NACKed loads retry via load_wakeup
+     *  every cycle (consuming the dcache port), blocking store_commit.
+     *  gem5 parks loads silently, so we track the debt and apply it
+     *  after cache unblocks (lsu.scala:548-600). */
+    int _storeBlockedAccumulator;
+
+    /** After cache unblocks, stores cannot use the dcache port for this
+     *  many cycles.  Models BOOM's load_wakeup (priority 11) starving
+     *  store_commit (priority 12) on the shared port (lsu.scala:548-600,
+     *  1224-1241). */
+    int _loadWakeupPriorityTimer;
+
+    /** Counts consecutive cycles stores were blocked by load_wakeup
+     *  priority.  Every 16 cycles, one store is allowed through,
+     *  matching BOOM's store_blocked_counter starvation relief
+     *  (lsu.scala:1228-1241). */
+    int _storeStarvationCounter;
 
     /** If the LSQ is currently waiting for stale translations */
     bool waitingForStaleTranslation;

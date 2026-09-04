@@ -152,6 +152,21 @@ class MSHRQueue : public Queue<MSHR>
     }
 
     /**
+     * Reserve a slot for post-fill processing without allocating an MSHR.
+     * Increments allocated count so isFull() reflects the occupied slot.
+     */
+    void reservePostFillSlot() { allocated++; }
+
+    /** Number of MSHRs currently allocated (incl. post-fill
+     *  reservations).  Used by the Option-A L2-pressure heuristic. */
+    int numAllocated() const { return allocated; }
+
+    /**
+     * Release a previously reserved post-fill slot.
+     */
+    void releasePostFillSlot() { allocated--; }
+
+    /**
      * Returns true if sufficient mshrs for prefetch.
      * @return True if sufficient mshrs for prefetch.
      */

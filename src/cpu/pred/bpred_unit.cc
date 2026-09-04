@@ -395,6 +395,15 @@ BPredUnit::commitBranch(ThreadID tid, PredictorHistory* &hist)
     // Correct BTB (at commit) -------------------------------------
     // Update the BTB for all committed taken branches.
     if (hist->actuallyTaken && !updateBTBAtSquash) { updateBTB(tid, hist); }
+
+    // Track consecutive not-taken resolves for BPD override bubble
+    // suppression.  Models BOOM's F1 BPD learning: after many
+    // not-taken resolves, F1 predicts not-taken → no redirect → no bubble.
+    // Update BIM counter for BPD override bubble suppression.
+    // Models BOOM's F1 BIM learning the branch direction.
+    if (hist->btbHit) {
+        btb->setOverrideSuppress(tid, hist->pc, !hist->actuallyTaken);
+    }
 }
 
 
@@ -591,14 +600,17 @@ BPredUnit::squash(const InstSeqNum &squashed_sn,
 void
 BPredUnit::updateBTB(ThreadID tid, PredictorHistory *&hist)
 {
-    // If a BTB hit is not required to identify branches
-    // (requiresBTBHit=False) we will not install `returns`
-    // and `indirect` branchee into the BTB.
+    // When requiresBTBHit=False, skip BTB installation for indirect
+    // branches that have a dedicated indirect predictor. However,
+    // always install returns into the BTB so the BAC can detect them
+    // on future encounters and use the RAS at the BAC stage (earlier
+    // than pre-decode). This matches BOOM where the BTB stores return
+    // entries and the frontend uses them for early RAS prediction.
     if (!requiresBTBHit) {
-        if (hist->inst->isReturn()) return;
         // For indirect branches we do install them if there is no
         // indirector available
-        if (iPred && hist->inst->isIndirectCtrl()) return;
+        if (iPred && hist->inst->isIndirectCtrl() &&
+            !hist->inst->isReturn()) return;
     }
 
     DPRINTF(Branch, "[tid:%i] BTB Update for [sn:%llu] PC %#x -> T:%#x\n", tid,

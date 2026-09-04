@@ -113,6 +113,10 @@ class FetchTarget
      * Will carry information while FT is waiting in th FTQ. */
     branch_prediction::BPredUnit::PredictorHistory *bpuHistory;
 
+    /** Number of fetch bubble cycles to insert after this FT is consumed.
+     *  Models BOOM F3 BPD override squashing F1/F2 (frontend.scala:845). */
+    unsigned bpdOverrideBubbleCycles = 0;
+
     /* Start address of the basic block */
     Addr
     startAddress()
@@ -259,6 +263,10 @@ class FTQ
 
     /** FTQ List of Fetch targets */
     std::array<std::list<FetchTargetPtr>, MaxThreads> ftq;
+
+    /** Tick until which the FTQ head is stalled due to BPD override bubble.
+     *  Models BOOM frontend.scala:845-853 where F3 override clears F1/F2. */
+    std::array<Tick, MaxThreads> overrideBubbleUntilTick = {};
 
   public:
     /** Registers probes. */

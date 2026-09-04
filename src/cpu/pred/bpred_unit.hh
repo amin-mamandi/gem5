@@ -181,6 +181,23 @@ class BPredUnit : public SimObject
         return btb->update(tid, pc, target);
     }
 
+    /** Set/clear BPD override suppression on a BTB entry.
+     *  Models BOOM's F1 BPD learning: after a conditional branch
+     *  resolves not-taken, suppress the BPD override bubble because
+     *  the F1 predictor would also predict not-taken.
+     */
+    void
+    BTBSetOverrideSuppress(ThreadID tid, Addr pc, bool suppress)
+    {
+        btb->setOverrideSuppress(tid, pc, suppress);
+    }
+
+    bool
+    BTBIsOverrideSuppressed(ThreadID tid, Addr pc)
+    {
+        return btb->isOverrideSuppressed(tid, pc);
+    }
+
     /**
      * Special function for the decoupled front-end. In it there can be
      * branches which are not detected by the BPU in the first place as it

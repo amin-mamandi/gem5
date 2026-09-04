@@ -61,6 +61,7 @@ class FP_ALU(FUDesc):
         OpDesc(opClass="FloatAdd", opLat=2),
         OpDesc(opClass="FloatCmp", opLat=2),
         OpDesc(opClass="FloatCvt", opLat=2),
+        OpDesc(opClass="IntToFloat", opLat=2),
         OpDesc(opClass="Bf16Cvt", opLat=2),
     ]
     count = 4

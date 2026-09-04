@@ -44,6 +44,7 @@
 #include <array>
 #include <bitset>
 #include <list>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -131,6 +132,18 @@ class FUPool : public SimObject
     /** Functional units. */
     std::vector<FuncUnit *> funcUnits;
 
+    /** Per-FU writeback-port group ID (0 = no group / no contention).
+     *  Indexed by FU index (matches funcUnits[]). */
+    std::vector<int> irespGroupPerFU;
+
+    /** Per-group writeback-port busy-until tick.  When an FU in group G
+     *  schedules its FUCompletion, the completion tick is pushed to be
+     *  >= irespBusyUntil[G], and irespBusyUntil[G] advances to the new
+     *  completion tick + 1 cycle.  Models BOOM v3's per-execution-unit
+     *  iresp PriorityMux contention.  Only consulted when
+     *  irespGroupPerFU[fu] > 0. */
+    std::map<int, Tick> irespBusyUntil;
+
   public:
     typedef FUPoolParams Params;
     /** Constructs a FU pool. */
@@ -190,6 +203,25 @@ class FUPool : public SimObject
     void dump();
 
     /** Returns the operation execution latency of the given capability. */
+    /** Returns the iresp group ID of an FU index (0 if none). */
+    int getIrespGroup(int fu_idx) const {
+        if (fu_idx < 0 || fu_idx >= (int)irespGroupPerFU.size())
+            return 0;
+        return irespGroupPerFU[fu_idx];
+    }
+
+    /** Reserve the iresp slot for `group` to fire at `requested_tick`.
+     *  If the group is busy past `requested_tick`, returns the new (later)
+     *  completion tick.  Updates irespBusyUntil[group] to track the slot. */
+    Tick reserveIresp(int group, Tick requested_tick, Tick clock_period) {
+        if (group <= 0) return requested_tick;
+        auto it = irespBusyUntil.find(group);
+        Tick busy = (it != irespBusyUntil.end()) ? it->second : 0;
+        Tick winning_tick = std::max(requested_tick, busy);
+        irespBusyUntil[group] = winning_tick + clock_period;
+        return winning_tick;
+    }
+
     Cycles getOpLatency(OpClass capability) {
         return maxOpLatencies[capability];
     }

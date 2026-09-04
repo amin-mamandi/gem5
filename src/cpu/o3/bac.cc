@@ -90,6 +90,7 @@ BAC::BAC(CPU *_cpu, const BaseO3CPUParams &params)
       numThreads(params.numThreads),
       maxFTPerCycle(params.maxFTPerCycle),
       maxTakenPredPerCycle(params.maxTakenPredPerCycle),
+      nBPDOverrideBubbles(params.nBPDOverrideBubbles),
       stats(_cpu, this)
 {
     fatal_if(decoupledFrontEnd && (fetchTargetWidth < params.fetchBufferSize),
@@ -102,6 +103,7 @@ BAC::BAC(CPU *_cpu, const BaseO3CPUParams &params)
     for (int i = 0; i < MaxThreads; i++) {
         bacPC[i].reset(params.isa[0]->newPCState());
         stalls[i] = {false, false, false};
+        bpdOverrideBubbleCount[i] = 0;
     }
 }
 
@@ -153,6 +155,7 @@ BAC::clearStates(ThreadID tid)
     stalls[tid].fetch = false;
     stalls[tid].drain = false;
     stalls[tid].bpu = false;
+    bpdOverrideBubbleCount[tid] = 0;
 
     assert(ftq != nullptr);
     ftq->resetState(tid);
@@ -517,8 +520,19 @@ BAC::tick()
 
             // Generate fetch targets if BAC is in running state
             if (bacStatus[tid] == Running) {
-                generateFetchTargets(tid, status_change);
-                activity = true;
+                // BPD override bubble: when the conditional predictor
+                // overrides the BTB direction, stall for N cycles to
+                // model BOOM's F1-BTB to F3-BPD pipeline latency.
+                if (bpdOverrideBubbleCount[tid] > 0) {
+                    --bpdOverrideBubbleCount[tid];
+                    activity = true;
+                    DPRINTF(BAC,
+                            "[tid:%i] BPD override bubble, %u cycles left\n",
+                            tid, bpdOverrideBubbleCount[tid]);
+                } else {
+                    generateFetchTargets(tid, status_change);
+                    activity = true;
+                }
             }
             stats.status[bacStatus[tid]]++;
         }
@@ -687,6 +701,24 @@ BAC::generateFetchTargets(ThreadID tid, bool &status_change)
             if (predict_taken) {
                 stats.predTakenBranches++;
                 num_taken++;
+            }
+
+            // BPD override bubble: In BOOM's decoupled front-end,
+            // the BTB result arrives at F1 and the BPD (TAGE) at F3.
+            // A BTB hit on a conditional branch implicitly predicts
+            // taken (redirect to target). When the BPD overrides to
+            // not-taken, the F2/F3 pipeline slots are squashed,
+            // creating a bubble. (BOOM frontend.scala F3 override)
+            if (nBPDOverrideBubbles > 0 && staticInst->isCondCtrl()
+                && !predict_taken
+                && !bpu->BTBIsOverrideSuppressed(tid,
+                                                 cur_pc.instAddr())) {
+                bpdOverrideBubbleCount[tid] = nBPDOverrideBubbles;
+                curFT->bpdOverrideBubbleCycles = nBPDOverrideBubbles;
+                DPRINTF(BAC,
+                        "[tid:%i] BPD override: BTB hit but BPD says "
+                        "not-taken at PC %#x, inserting %u bubble cycles\n",
+                        tid, cur_pc.instAddr(), nBPDOverrideBubbles);
             }
         }
 

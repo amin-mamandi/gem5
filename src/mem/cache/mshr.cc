@@ -304,6 +304,7 @@ MSHR::allocate(Addr blk_addr, unsigned blk_size, PacketPtr target,
     blkSize = blk_size;
     isSecure = target->isSecure();
     readyTime = when_ready;
+    allocTick = curTick();
     order = _order;
     assert(target);
     isForward = false;

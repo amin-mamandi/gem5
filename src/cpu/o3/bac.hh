@@ -416,6 +416,16 @@ class BAC
     /* Max number taken prediction by the BPU per Cycle*/
     const unsigned maxTakenPredPerCycle;
 
+    /** Number of bubble cycles when BPD overrides BTB direction.
+     *  Models BOOM's F1-BTB to F3-BPD pipeline latency. When the
+     *  conditional predictor (TAGE) overrides the BTB's implicit
+     *  taken prediction for a conditional branch, the front-end
+     *  stalls for this many cycles. */
+    const unsigned nBPDOverrideBubbles;
+
+    /** Countdown for BPD override bubble stall (per-thread). */
+    unsigned bpdOverrideBubbleCount[MaxThreads];
+
     /** Align a address to the start of a cache block. */
     inline Addr
     alignToCacheBlock(Addr addr)

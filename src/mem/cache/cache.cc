@@ -418,6 +418,11 @@ Cache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk, Tick forward_time,
 void
 Cache::recvTimingReq(PacketPtr pkt)
 {
+    // Track store access timing for wakeup hold gate
+    if (pkt->isWrite() || pkt->cmd == MemCmd::StoreCondReq) {
+        lastStoreTick = curTick();
+        fillsSinceLastStore = 0;
+    }
     DPRINTF(CacheTags, "%s tags:\n%s\n", __func__, tags->print());
 
     promoteWholeLineWrites(pkt);
@@ -729,6 +734,18 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
     }
 
     MSHR::TargetList targets = mshr->extractServiceableTargets(pkt);
+
+    // Per-target staggering for BOOM s_drain_rpq_loads/_rpq.
+    // Loads drain immediately at 1/cycle; stores wait
+    // (mshrStoreReplayLatency + dirty? currentFillEffectiveWbPenalty)
+    // then drain at 1/cycle.  currentFillEffectiveWbPenalty already
+    // includes the Option-A L2-pressure bump, so per-store offsets
+    // grow under sustained L2 backpressure too.
+    unsigned drainLoadIdx = 0;
+    unsigned drainStoreIdx = 0;
+    const Cycles storeBaseOffset = mshrStoreReplayLatency
+        + (fillStoreReplayTick > 0
+           ? currentFillEffectiveWbPenalty : Cycles(0));
     for (auto &target: targets) {
         Packet *tgt_pkt = target.pkt;
         switch (target.source) {
@@ -811,6 +828,85 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
                 // the core.
                 completion_time += clockEdge(responseLatency) +
                     (transfer_offset ? pkt->payloadDelay : 0);
+
+                // BOOM s_drain_rpq_loads vs s_drain_rpq separation:
+                // Loads are replayed from the line buffer immediately
+                // after fill (s_drain_rpq_loads, mshrs.scala:268).
+                // Stores wait until s_drain_rpq (mshrs.scala:362)
+                // which comes AFTER s_commit_line (4 beats writing
+                // fill data to data array) and, for dirty evictions,
+                // after the writeback (s_wb_req/s_wb_resp).
+                // Delay store target completion when a dirty WB
+                // occurred and the parameter is configured.
+                {
+                    // Per-target completion staggering:
+                    // - load N: +N cycles (s_drain_rpq_loads)
+                    // - store N: +(replay_offset + N) cycles
+                    //   (s_drain_rpq, after meta+commit_line and
+                    //    optional dirty-WB FSM)
+                    // Cycles ctor is explicit -- gem5's Cycles has an
+                    // implicit uint64_t conversion that otherwise
+                    // collapses Cycles*unsigned arithmetic to uint64_t.
+
+                    // BOOM speculative load wakeup failure penalty:
+                    // every L1D miss causes spec_ld_wakeup at s1 to
+                    // fire and then ld_miss at s2+1 to squash
+                    // speculatively-woken dependents (lsu.scala:1288,
+                    // 1415).  For short fills (L2 hits), this bubble
+                    // is a real cost.  For long fills (L2 miss ->
+                    // memory), the bubble is fully absorbed by the
+                    // fill latency so the penalty is redundant.
+                    if (tgt_pkt->isRead() &&
+                        boomSpecLdMissPenalty > Cycles(0)) {
+                        // Pressure-dependent spec penalty: BOOM's effective
+                        // spec wakeup cost correlates with dcache port
+                        // contention.  When multiple MSHRs are in-flight
+                        // (high pressure), nack-retries and wakeup replays
+                        // compete for the single dcache port, amplifying
+                        // the effective penalty.  When only one MSHR is
+                        // active (serial loads), port contention is minimal
+                        // and the penalty matches the structural ~4-cycle
+                        // spec_ld_wakeup bubble (lsu.scala:1288-1424).
+                        //
+                        // boomSpecPressureThreshold > 0 enables this mode:
+                        //   allocated >= threshold → full penalty
+                        //   allocated <  threshold → low-pressure penalty
+                        Cycles effectivePenalty = boomSpecLdMissPenalty;
+                        if (boomSpecPressureThreshold > 0) {
+                            int nInService = mshrQueue.numInService();
+                            if ((unsigned)nInService <
+                                boomSpecPressureThreshold) {
+                                effectivePenalty = boomSpecPenaltyLowPressure;
+                            }
+                        }
+                        const Cycles missLat = ticksToCycles(
+                            curTick() - mshr->getAllocTick());
+                        if (effectivePenalty > Cycles(0) &&
+                            missLat < effectivePenalty) {
+                            Cycles unabsorbed = Cycles(
+                                (uint64_t)effectivePenalty -
+                                (uint64_t)missLat);
+                            completion_time += cyclesToTicks(unabsorbed);
+                        }
+                    }
+
+                    const bool isStoreTgt = tgt_pkt->needsWritable();
+                    if (isStoreTgt && mshrDrainStoreCycles > 0) {
+                        const Cycles storeOff = Cycles(
+                            storeBaseOffset +
+                            mshrDrainStoreCycles * drainStoreIdx);
+                        completion_time += cyclesToTicks(storeOff);
+                        ++drainStoreIdx;
+                    } else if (tgt_pkt->isRead()
+                               && (mshrDrainLoadCycles > 0 ||
+                                   mshrDrainLoadBaseCycles > 0)) {
+                        const Cycles loadOff = Cycles(
+                            mshrDrainLoadBaseCycles +
+                            mshrDrainLoadCycles * drainLoadIdx);
+                        completion_time += cyclesToTicks(loadOff);
+                        ++drainLoadIdx;
+                    }
+                }
 
                 assert(!tgt_pkt->req->isUncacheable());
 
@@ -962,8 +1058,12 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
 PacketPtr
 Cache::evictBlock(CacheBlk *blk)
 {
-    PacketPtr pkt = (blk->isSet(CacheBlk::DirtyBit) || writebackClean) ?
-        writebackBlk(blk) : cleanEvictBlk(blk);
+    PacketPtr pkt = nullptr;
+    if (blk->isSet(CacheBlk::DirtyBit) || writebackClean) {
+        pkt = writebackBlk(blk);
+    } else if (!boomSilentCleanEvict) {
+        pkt = cleanEvictBlk(blk);
+    }
 
     invalidateBlock(blk);
 

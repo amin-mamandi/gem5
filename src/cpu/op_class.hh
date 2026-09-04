@@ -64,6 +64,7 @@ static const OpClass FloatMultAccOp = enums::FloatMultAcc;
 static const OpClass FloatDivOp = enums::FloatDiv;
 static const OpClass FloatMiscOp = enums::FloatMisc;
 static const OpClass FloatSqrtOp = enums::FloatSqrt;
+static const OpClass IntToFloatOp = enums::IntToFloat;
 static const OpClass SimdAddOp = enums::SimdAdd;
 static const OpClass SimdAddAccOp = enums::SimdAddAcc;
 static const OpClass SimdAluOp = enums::SimdAlu;

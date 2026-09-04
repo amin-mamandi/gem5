@@ -424,6 +424,14 @@ class InstructionQueue
      */
     std::list<DynInstPtr> deferredMemInsts;
 
+    /** BOOM one-load-per-cycle wakeup model (lsu.scala:436-451). */
+    bool boomLoadWakeupModel;
+
+    /** Countdown: load wakeup cooldown (BOOM nack-retry pipeline depth). */
+    unsigned loadWakeupCooldown;
+    /** Countdown: blocked loads wait until this reaches 0 before retry. */
+    unsigned retryDelayCycles;
+
     /** List of instructions that have been cache blocked. */
     std::list<DynInstPtr> blockedMemInsts;
 

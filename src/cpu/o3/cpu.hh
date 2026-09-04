@@ -173,6 +173,12 @@ class CPU : public BaseCPU
     bool isCpuDrained() const;
 
   public:
+    /** BOOM-faithful integer divider latency knobs. */
+    const bool boomDivEarlyOut;
+    const unsigned boomDivUnroll;
+    const unsigned boomDivXlen;
+    const unsigned boomDivPipelineCycles;
+
     /** Constructs a CPU with the given parameters. */
     CPU(const BaseO3CPUParams &params);
 

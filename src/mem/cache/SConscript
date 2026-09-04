@@ -43,8 +43,11 @@ SimObject('Cache.py', sim_objects=[
     'WriteAllocator', 'BaseCache', 'Cache', 'NoncoherentCache'],
     enums=['Clusivity'])
 
+SimObject('BoomInclusiveCache.py', sim_objects=['BoomInclusiveCache'])
+
 Source('base.cc')
 Source('cache.cc')
+Source('boom_inclusive_cache.cc')
 Source('cache_blk.cc')
 Source('mshr.cc')
 Source('mshr_queue.cc')

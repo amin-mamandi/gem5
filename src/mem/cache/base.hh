@@ -48,6 +48,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <deque>
 #include <string>
 
 #include "base/addr_range.hh"
@@ -265,8 +266,10 @@ class BaseCache : public ClockedObject
         /** Do not accept any new requests. */
         void setBlocked();
 
-        /** Return to normal operation and accept new requests. */
-        void clearBlocked();
+        /** Return to normal operation and accept new requests.
+         *  @param mshrRelated true when the cleared cause was
+         *         Blocked_NoMSHRs (triggers nack-retry delay). */
+        void clearBlocked(bool mshrRelated = false);
 
         bool isBlocked() const { return blocked; }
 
@@ -704,6 +707,21 @@ class BaseCache : public ClockedObject
      */
     EventFunctionWrapper writebackTempBlockAtomicEvent;
 
+    /** Release times for post-fill reserved MSHR slots */
+    std::deque<Tick> pendingPostFillReleaseTicks;
+
+    /** Tick at which the last serialized dirty writeback completes.
+     *  BOOM has a single shared WritebackUnit (dcache.scala:431) that
+     *  serializes all dirty eviction writebacks from the L1 D-cache MSHRs.
+     *  This tracks when that shared resource becomes available. */
+    Tick lastDirtyWbCompletionTick = 0;
+
+    /** Release post-fill reserved MSHR slots whose time has arrived */
+    void processMSHRPostFillRelease();
+
+    /** Event for processing deferred MSHR deallocations */
+    EventFunctionWrapper mshrPostFillDeallocEvent;
+
     /**
      * When a block is overwriten, its compression information must be updated,
      * and it may need to be recompressed. If the compression size changes, the
@@ -865,6 +883,13 @@ class BaseCache : public ClockedObject
     virtual void memInvalidate() override;
 
     /**
+     * Reset stats and optionally flush cache contents.
+     * When flushOnStatReset is true, writes back dirty blocks
+     * and invalidates all lines to match BOOM verilator cold-start.
+     */
+    void resetStats() override;
+
+    /**
      * Determine if there are any dirty blocks in the cache.
      *
      * @return true if at least one block is dirty, false otherwise.
@@ -917,6 +942,181 @@ class BaseCache : public ClockedObject
      * latency.
      */
     const Cycles responseLatency;
+
+    /**
+     * Cycles the MSHR remains allocated after fill data arrives,
+     * modeling post-fill processing (meta read/write, replay drain,
+     * GrantAck) as in BOOM's L1 D-cache MSHR state machine.
+     */
+    const Cycles mshrPostFillCycles;
+    const Cycles mshrCleanFillCycles;
+
+    /** Fills since last store reached recvTimingReq (clean-fill gate). */
+    unsigned fillsSinceLastStore;
+    const Cycles mshrPostFillStoreExtra;
+    const Cycles boomFillWakeupExtraHold;
+    const Cycles boomFillWakeupMissThreshold;
+    /** Tick of the most recent store access (for wakeup hold gating). */
+    Tick lastStoreTick;
+    /** Tick of the last fill that received wakeupExtra hold. */
+    Tick lastWakeupFillTick;
+    const Cycles mshrDirtyWbPenaltyCycles;
+    const Cycles mshrStoreReplayLatency;
+    /** BOOM s_drain_rpq_loads per-load-target cycles. */
+    const Cycles mshrDrainLoadCycles;
+    const Cycles mshrDrainLoadBaseCycles;
+    /** BOOM s_drain_rpq per-store-target cycles. */
+    const Cycles mshrDrainStoreCycles;
+    /** L1 MSHR occupancy threshold beyond which dirty-WB penalty is
+     *  bumped, modeling L2-grant backpressure (Option A heuristic). */
+    const unsigned mshrL2PressureMshrThreshold;
+    /** Cycles added to mshrDirtyWbPenaltyCycles when L1 MSHR
+     *  occupancy >= mshrL2PressureMshrThreshold. */
+    const Cycles mshrL2PressureExtraCycles;
+    /** Use the BoomWritebackUnit FSM model (Option C). */
+    // --- Phase-3 L1D MSHR FSM walk (per-state arbiters) ---
+    const bool mshrFsmWalkEnable;
+    const Cycles mshrFsmMetaReadCycles;
+    const Cycles mshrFsmMetaRespCycles;
+    const Cycles mshrFsmMetaClearCycles;
+    const Cycles mshrFsmWbReqCycles;
+    const Cycles mshrFsmWbRespCycles;
+    const Cycles mshrFsmCommitLineCycles;
+    const Cycles mshrFsmMetaWriteCycles;
+    const Cycles mshrFsmMemFinishCycles;
+    const Cycles mshrFsmDrainLoadCycles;
+    const Cycles mshrFsmDrainStoreCycles;
+    /** Per-cache shared arbiter busy-until ticks. */
+    Tick mshrFsmMetaArbBusyUntil = 0;
+    Tick mshrFsmWbArbBusyUntil = 0;
+    Tick mshrFsmRefillArbBusyUntil = 0;
+
+    /** L1 MSHR FSM shared-arbiter cycles per fill (Phase-b).
+     *  When > 0, every post-fill release is gated through a single
+     *  per-cache busy-until tick that advances by this many cycles
+     *  per fill.  Models BOOM L1D MSHRs sharing meta+refill+wb
+     *  arbiters (mshrs.scala). */
+    const Cycles mshrFsmArbiterCycles;
+
+    /** Tick at which the L1 MSHR FSM shared arbiter is next free.
+     *  Updated atomically per post-fill release. */
+    Tick mshrFsmArbiterBusyUntil = 0;
+
+    const bool enableBoomWbUnit;
+    const Cycles boomWbUnitRefillCycles;
+    const Cycles boomWbUnitGrantBaselineCycles;
+    /** Per-event penalty when consecutive dirty-WB fills target the
+     *  same L1D set (BOOM dcache.scala:730 s2_nack_wb). */
+    const Cycles boomWbNackPenaltyCycles;
+    /** Delay (cycles) on the cpu-side retry signal when the dcache
+     *  transitions from blocked→unblocked.  Models BOOM nack-retry
+     *  pipeline cost (dcache.scala nack at s2 → LDQ re-arb → s0→s1→s2). */
+    const Cycles boomNackRetryCycles;
+    /** Suppress CleanEvict packets for clean block evictions, matching
+     *  BOOM TileLink silent eviction of Branch-state lines. */
+    const bool boomSilentCleanEvict;
+    /** Flat penalty (cycles) added to every load target completed from
+     *  an MSHR fill.  Models BOOM spec_ld_wakeup failure penalty
+     *  (lsu.scala:1288-1293, 1415-1424). */
+    const Cycles boomSpecLdMissPenalty;
+    /** Fill-duration threshold above which spec penalty is suppressed. */
+    const Cycles boomSpecLongFillThreshold;
+    /** When > 0, enables continuous RTT-based scaling of spec penalty.
+     *  Penalty is scaled by max(0, rttScale - fillAge) / rttScale.
+     *  Replaces binary threshold when set. */
+    const Cycles boomSpecPenaltyRttScale;
+    /** Minimum MSHR miss latency before spec penalty is applied. */
+    const Cycles boomSpecPenaltyMinMissLat;
+    /** Spec penalty for low-pressure case (few MSHRs in service). */
+    const Cycles boomSpecPenaltyLowPressure;
+    /** numInService threshold for pressure-dependent spec penalty. */
+    const unsigned boomSpecPressureThreshold;
+    /** Flush cache contents when stats are reset (at ROI_BEGIN).
+     *  Matches BOOM verilator cold-start: .bss data is not pre-warmed
+     *  in the cache before the region of interest. */
+    const bool flushOnStatReset;
+    /** Set index of the most recent dirty-WB eviction, for detecting
+     *  consecutive same-set conflicts.  -1 = no prior WB. */
+    int lastDirtyWbSetIndex = -1;
+    /** Number of sets in this cache, for set-index computation in the
+     *  s2_nack_wb model.  Computed once in the constructor. */
+    unsigned nackNumSets;
+    /** Effective dirty-WB penalty for the current fill, computed in
+     *  recvTimingResp from base + L2-pressure adjustment.  Read by
+     *  Cache::serviceMSHRTargets to compute per-store completion
+     *  offset; valid only during a single recvTimingResp call. */
+    Cycles currentFillEffectiveWbPenalty = Cycles(0);
+
+    /** BOOM WritebackUnit FSM model (Option C, mirrors
+     *  boom/v3/lsu/dcache.scala BoomWritebackUnit).  Single shared
+     *  instance per L1 cache; serializes dirty evictions; per-WB
+     *  cost = structural FSM cycles + observed-RTT-derived grant
+     *  latency.  Replaces the constant mshrDirtyWbPenaltyCycles
+     *  when enableBoomWbUnit is set. */
+    class BoomWritebackUnit
+    {
+      public:
+        BoomWritebackUnit() = default;
+
+        /** Schedule a writeback.  Returns the tick at which the WB
+         *  unit's FSM completes (s_grant resolved), i.e. when the
+         *  L1 MSHR can release its slot. */
+        Tick requestWriteback(Tick submitTick,
+                              Cycles refillCycles,
+                              Cycles grantBaseline,
+                              Tick clockPeriod) {
+            const Tick start = std::max(submitTick, busyUntil);
+            // Structural FSM cycles:
+            //   s_fill_buffer (refillCycles, read evicted line)
+            // + s_lsu_release (1)
+            // + s_active     (refillCycles, send TLBundleC release)
+            const Tick structural =
+                Tick(2 * refillCycles + Cycles(1)) * clockPeriod;
+            // s_grant variable cycles: estimated as (avg observed
+            // fill RTT - L2 baseline structural latency).  When L2
+            // is idle, observed RTT ~= baseline, so grant ~= 0.
+            // Under backpressure, RTT exceeds baseline and grant
+            // grows.  Negative values clamped at 0.
+            const Tick avgRtt = avgObservedRtt();
+            const Tick baselineTicks =
+                Tick(grantBaseline) * clockPeriod;
+            const Tick grant =
+                avgRtt > baselineTicks ? avgRtt - baselineTicks : 0;
+            const Tick complete = start + structural + grant;
+            busyUntil = complete;
+            return complete;
+        }
+
+        /** Record an observed fill RTT for proxying L2 grant
+         *  latency. */
+        void observeFillRtt(Tick rtt) {
+            recentRtts.push_back(rtt);
+            if (recentRtts.size() > kWindow)
+                recentRtts.pop_front();
+        }
+
+        Tick getBusyUntil() const { return busyUntil; }
+
+      private:
+        Tick avgObservedRtt() const {
+            if (recentRtts.empty()) return 0;
+            Tick sum = 0;
+            for (Tick r : recentRtts) sum += r;
+            return sum / recentRtts.size();
+        }
+        Tick busyUntil = 0;
+        std::deque<Tick> recentRtts;
+        static constexpr size_t kWindow = 16;
+    };
+
+    /** BOOM WB unit instance (active when enableBoomWbUnit=true). */
+    BoomWritebackUnit boomWbUnit;
+
+    /** Set in recvTimingResp before serviceMSHRTargets so that store
+     *  targets can be delayed when a fill causes a dirty writeback.
+     *  Models BOOM s_drain_rpq (stores) happening AFTER s_drain_rpq_loads
+     *  (loads), with dirty WB + commit_line in between. */
+    Tick fillStoreReplayTick = 0;
 
     /**
      * Whether tags and data are accessed sequentially.
@@ -1231,7 +1431,7 @@ class BaseCache : public ClockedObject
         DPRINTF(Cache,"Unblocking for cause %d, mask=%d\n", cause, blocked);
         if (blocked == 0) {
             stats.blockedCycles[cause] += curCycle() - blockedCycle;
-            cpuSidePort.clearBlocked();
+            cpuSidePort.clearBlocked(cause == Blocked_NoMSHRs);
         }
     }
 

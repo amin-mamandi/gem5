@@ -111,16 +111,53 @@ SimpleBTB::getInst(ThreadID tid, Addr instPC)
 }
 
 void
+SimpleBTB::setOverrideSuppress(ThreadID tid, Addr instPC, bool notTaken)
+{
+    BTBEntry *entry = btb.findEntry({instPC, tid});
+    if (entry) {
+        if (notTaken) {
+            if (entry->consecutiveNotTaken < UINT16_MAX)
+                entry->consecutiveNotTaken++;
+        } else {
+            entry->consecutiveNotTaken = 0;
+        }
+    }
+}
+
+
+bool
+SimpleBTB::isOverrideSuppressed(ThreadID tid, Addr instPC)
+{
+    // BOOM faubtb.scala:28-33,84: 2-bit saturating counter.
+    // s1_taken = !is_br || ctr(1).  From strongly-taken (ctr=3),
+    // two not-taken commits decrement to ctr=1 where ctr(1)=0
+    // -> predicts not-taken -> no F1 redirect -> no BPD override bubble.
+    static constexpr uint16_t kSuppressThreshold = 114;
+    BTBEntry *entry = btb.findEntry({instPC, tid});
+    return entry && (entry->resetCount > 0)
+           && (entry->consecutiveNotTaken >= kSuppressThreshold);
+}
+
+void
 SimpleBTB::update(ThreadID tid, Addr instPC,
                   const PCStateBase &target,
                   BranchType type, StaticInstPtr inst)
 {
     stats.updates[type]++;
 
-    BTBEntry *victim = btb.findVictim({instPC, tid});
+    BTBEntry *existing = btb.findEntry({instPC, tid});
 
-    btb.insertEntry({instPC, tid}, victim);
-    victim->update(target, inst);
+    if (existing) {
+        existing->update(target, inst);
+        btb.accessEntry(existing);
+        existing->consecutiveNotTaken = 0;
+        if (existing->resetCount < 255)
+            existing->resetCount++;
+    } else {
+        BTBEntry *victim = btb.findVictim({instPC, tid});
+        btb.insertEntry({instPC, tid}, victim);
+        victim->update(target, inst);
+    }
 }
 
 

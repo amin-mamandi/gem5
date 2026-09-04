@@ -214,6 +214,10 @@ LSQUnit::init(CPU *cpu_ptr, IEW *iew_ptr, const BaseO3CPUParams &params,
     DPRINTF(LSQUnit, "Creating LSQUnit%i object.\n",lsqID);
 
     depCheckShift = params.LSQDepCheckShift;
+    storeToLoadForwardingLatency = params.storeToLoadForwardingLatency;
+    loadPortAtExecute = params.loadPortAtExecute;
+    storePortAtExecute = params.storePortAtExecute;
+    boomNackLoadRetry = params.boomNackLoadRetry;
     checkLoads = params.LSQCheckLoads;
     needsTSO = params.needsTSO;
 
@@ -687,6 +691,21 @@ LSQUnit::executeStore(const DynInstPtr &store_inst)
 
     assert(!store_inst->isSquashed());
 
+    // BOOM dcache s0 model: store address computation goes through the
+    // same dcache pipeline as load execution (lsu.scala:548-600).
+    // When storePortAtExecute is true, consume a port here so that
+    // store-addr competes with loads for s0 arbitration.  Store data
+    // writeback uses a separate path and does not consume the port.
+    if (storePortAtExecute) {
+        if (!lsq->cachePortAvailable(false)) {
+            DPRINTF(LSQUnit, "Store [sn:%lli] blocked by dcache port\n",
+                    store_inst->seqNum);
+            iewStage->retryMemInst(store_inst);
+            store_inst->clearIssued();
+            return NoFault;
+        }
+        lsq->cachePortBusy(false);
+    }
     // Check the recently completed loads to see if any match this store's
     // address.  If so, then we have a memory ordering violation.
     typename LoadQueue::iterator loadIt = store_inst->lqIt;
@@ -821,7 +840,7 @@ LSQUnit::writebackStores()
            storeWBIt->valid() &&
            storeWBIt->canWB() &&
            ((!needsTSO) || (!storeInFlight)) &&
-           lsq->cachePortAvailable(false)) {
+           (storePortAtExecute || lsq->cachePortAvailable(false))) {
 
         if (isStoreBlocked) {
             DPRINTF(LSQUnit, "Unable to write back any more stores, cache"
@@ -1226,8 +1245,14 @@ LSQUnit::trySendPacket(bool isLoad, PacketPtr data_pkt)
 
     LSQRequest *request = dynamic_cast<LSQRequest*>(data_pkt->senderState);
 
-    if (!lsq->cacheBlocked() &&
-        lsq->cachePortAvailable(isLoad)) {
+    // When loadPortAtExecute is true, load port was already consumed
+    // in read() at the BOOM dcache s0 entry point.  Skip the port
+    // availability check for loads; only check cacheBlocked().
+    bool portOk =
+        (isLoad && loadPortAtExecute) || (!isLoad && storePortAtExecute)
+            ? true
+            : lsq->cachePortAvailable(isLoad);
+    if (!lsq->cacheBlocked() && portOk) {
         if (!dcachePort->sendTimingReq(data_pkt)) {
             ret = false;
             cache_got_blocked = true;
@@ -1240,7 +1265,11 @@ LSQUnit::trySendPacket(bool isLoad, PacketPtr data_pkt)
         if (!isLoad) {
             isStoreBlocked = false;
         }
-        lsq->cachePortBusy(isLoad);
+        // Skip port consumption for loads when already consumed in read()
+        if (!((isLoad && loadPortAtExecute) ||
+              (!isLoad && storePortAtExecute))) {
+            lsq->cachePortBusy(isLoad);
+        }
         request->packetSent();
     } else {
         if (cache_got_blocked) {
@@ -1405,6 +1434,28 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
         return NoFault;
     }
 
+    // BOOM dcache pipeline model (lsu.scala:548-600, dcache.scala s0):
+    // In BOOM, every load entering the dcache pipeline at s0 consumes
+    // the port, regardless of whether it hits, misses, gets nacked, or
+    // is forwarded from the STQ.  The STQ forwarding check (LCAM) at
+    // s1/s2 happens AFTER the port is allocated at s0.  When
+    // loadPortAtExecute is true, consume the port here (at the start
+    // of read()) rather than inside trySendPacket().
+    if (loadPortAtExecute) {
+        if (!lsq->cachePortAvailable(true)) {
+            // No dcache port available -- in BOOM this load would not
+            // have won s0 arbitration.  Retry next cycle.
+            iewStage->retryMemInst(load_inst);
+            load_inst->clearIssued();
+            load_inst->effAddrValid(false);
+            ++stats.rescheduledLoads;
+            load_entry.setRequest(nullptr);
+            request->discard();
+            return NoFault;
+        }
+        lsq->cachePortBusy(true);  // s0 port allocated
+    }
+
     // Check the SQ for any previous stores that might lead to forwarding
     auto store_it = load_inst->sqIt;
     assert (store_it >= storeWBIt);
@@ -1540,10 +1591,15 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
                 WritebackEvent *wb = new WritebackEvent(load_inst, data_pkt,
                         this);
 
-                // We'll say this has a 1 cycle load-store forwarding latency
-                // for now.
-                // @todo: Need to make this a parameter.
-                cpu->schedule(wb, curTick());
+                // BOOM dcache s0->s1->s2 pipeline: store forwarding
+                // check at s1, data mux at s2 = 2 cycle latency.
+                // Configurable via storeToLoadForwardingLatency.
+                {
+                    Tick fwd_tick = (storeToLoadForwardingLatency > Cycles(0))
+                        ? cpu->clockEdge(storeToLoadForwardingLatency)
+                        : curTick();
+                    cpu->schedule(wb, fwd_tick);
+                }
 
                 // Don't need to do anything special for split loads.
                 ++stats.forwLoads;
@@ -1623,9 +1679,24 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
     if (!request->isSent()) {
         if (!lsq->cacheBlocked()) {
             iewStage->retryMemInst(load_inst);
-       } else {
+        } else if (boomNackLoadRetry) {
+            // BOOM dcache nack-retry model (lsu.scala:1219,
+            // dcache.scala s0-s2): when MSHRs are full, nacked loads
+            // re-enter the pipeline each cycle, consuming a dcache port
+            // and competing with store commits for the shared port.
+            // gem5 default parks them in blockMemInst until the cache
+            // unblocks, wasting no port bandwidth.  With this flag,
+            // retry immediately so the load re-executes next cycle,
+            // burning a port (loadPortAtExecute) on each attempt.
+            iewStage->retryMemInst(load_inst);
+            load_inst->clearIssued();
+        } else {
             iewStage->blockMemInst(load_inst);
-       }
+            // Track parked loads for BOOM load_wakeup priority model
+            // (lsu.scala:548-600): each parked load = 1 cycle of
+            // load_wakeup consuming the dcache port after unblock.
+            lsq->incBlockedLoadCount();
+        }
     }
 
     return NoFault;

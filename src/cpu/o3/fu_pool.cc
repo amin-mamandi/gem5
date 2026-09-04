@@ -133,6 +133,7 @@ FUPool::FUPool(const Params &p)
             //  Add the appropriate number of copies of this FU to the list
             fu->name = i->name() + "(0)";
             funcUnits.push_back(fu);
+            irespGroupPerFU.push_back(i->irespGroup);
 
             for (int c = 1; c < i->number; ++c) {
                 std::ostringstream s;
@@ -142,6 +143,7 @@ FUPool::FUPool(const Params &p)
                 s << i->name() << "(" << c << ")";
                 fu2->name = s.str();
                 funcUnits.push_back(fu2);
+                irespGroupPerFU.push_back(i->irespGroup);
             }
         }
     }

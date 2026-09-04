@@ -82,9 +82,11 @@ class FUDesc : public SimObject
   public:
     std::vector<OpDesc *> opDescList;
     unsigned         number;
+    int              irespGroup;  ///< writeback-port group; 0 = no group
 
     FUDesc(const FUDescParams &p)
-        : SimObject(p), opDescList(p.opList), number(p.count) {};
+        : SimObject(p), opDescList(p.opList), number(p.count),
+          irespGroup(p.iresp_group) {};
 };
 
 

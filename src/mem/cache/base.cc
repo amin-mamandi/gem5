@@ -96,12 +96,54 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
       writebackTempBlockAtomicEvent([this]{ writebackTempBlockAtomic(); },
                                     name(), false,
                                     EventBase::Delayed_Writeback_Pri),
+      mshrPostFillDeallocEvent([this]{ processMSHRPostFillRelease(); },
+                                name()),
       blkSize(blk_size),
       lookupLatency(p.tag_latency),
       dataLatency(p.data_latency),
       forwardLatency(p.tag_latency),
       fillLatency(p.data_latency),
       responseLatency(p.response_latency),
+      mshrPostFillCycles(p.mshr_post_fill_cycles),
+      mshrCleanFillCycles(p.mshr_clean_fill_cycles),
+      fillsSinceLastStore(0),
+      mshrPostFillStoreExtra(p.mshr_post_fill_store_extra),
+      boomFillWakeupExtraHold(p.boom_fill_wakeup_extra_hold),
+      boomFillWakeupMissThreshold(p.boom_fill_wakeup_miss_threshold),
+      lastStoreTick(0),
+      lastWakeupFillTick(0),
+      mshrDirtyWbPenaltyCycles(p.mshr_dirty_wb_penalty_cycles),
+      mshrStoreReplayLatency(p.mshr_store_replay_latency),
+      mshrDrainLoadCycles(p.mshr_drain_load_cycles),
+      mshrDrainLoadBaseCycles(p.mshr_drain_load_base_cycles),
+      mshrDrainStoreCycles(p.mshr_drain_store_cycles),
+      mshrL2PressureMshrThreshold(p.mshr_l2_pressure_mshr_threshold),
+      mshrL2PressureExtraCycles(p.mshr_l2_pressure_extra_cycles),
+      mshrFsmWalkEnable(p.mshr_fsm_walk_enable),
+      mshrFsmMetaReadCycles(p.mshr_fsm_meta_read_cycles),
+      mshrFsmMetaRespCycles(p.mshr_fsm_meta_resp_cycles),
+      mshrFsmMetaClearCycles(p.mshr_fsm_meta_clear_cycles),
+      mshrFsmWbReqCycles(p.mshr_fsm_wb_req_cycles),
+      mshrFsmWbRespCycles(p.mshr_fsm_wb_resp_cycles),
+      mshrFsmCommitLineCycles(p.mshr_fsm_commit_line_cycles),
+      mshrFsmMetaWriteCycles(p.mshr_fsm_meta_write_cycles),
+      mshrFsmMemFinishCycles(p.mshr_fsm_mem_finish_cycles),
+      mshrFsmDrainLoadCycles(p.mshr_fsm_drain_load_cycles),
+      mshrFsmDrainStoreCycles(p.mshr_fsm_drain_store_cycles),
+            mshrFsmArbiterCycles(p.mshr_fsm_arbiter_cycles),
+            enableBoomWbUnit(p.enable_boom_wb_unit),
+      boomWbUnitRefillCycles(p.boom_wb_unit_refill_cycles),
+      boomWbUnitGrantBaselineCycles(p.boom_wb_unit_grant_baseline_cycles),
+      boomWbNackPenaltyCycles(p.boom_wb_nack_penalty_cycles),
+      boomNackRetryCycles(p.boom_nack_retry_cycles),
+      boomSilentCleanEvict(p.boom_silent_clean_evict),
+      boomSpecLdMissPenalty(p.boom_spec_ld_miss_penalty),
+      boomSpecLongFillThreshold(p.boom_spec_long_fill_threshold),
+      boomSpecPenaltyRttScale(p.boom_spec_penalty_rtt_scale),
+      boomSpecPenaltyMinMissLat(p.boom_spec_penalty_min_miss_lat),
+      boomSpecPenaltyLowPressure(p.boom_spec_penalty_low_pressure),
+      boomSpecPressureThreshold(p.boom_spec_pressure_threshold),
+      flushOnStatReset(p.flush_on_stat_reset),
       sequentialAccess(p.sequential_access),
       numTarget(p.tgts_per_mshr),
       forwardSnoops(true),
@@ -125,6 +167,11 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
 
     // forward snoops is overridden in init() once we can query
     // whether the connected requestor is actually snooping or not
+
+    // Compute numSets for s2_nack_wb set-conflict tracking.
+    // size / (assoc * blkSize) = number of sets.
+    nackNumSets = p.size / (p.assoc * blkSize);
+    if (nackNumSets == 0) nackNumSets = 1;
 
     tempBlock = new TempCacheBlk(blkSize,
         genTagExtractor(tags->params().indexing_policy));
@@ -164,14 +211,25 @@ BaseCache::CacheResponsePort::setBlocked()
 }
 
 void
-BaseCache::CacheResponsePort::clearBlocked()
+BaseCache::CacheResponsePort::clearBlocked(bool mshrRelated)
 {
     assert(blocked);
     DPRINTF(CachePort, "Port is accepting new requests\n");
     blocked = false;
     if (mustSendRetry) {
-        // @TODO: need to find a better time (next cycle?)
-        cache.schedule(sendRetryEvent, curTick() + 1);
+        // Model BOOM dcache nack-retry pipeline cost: after a load is
+        // nacked at s2 (dcache.scala:726-732) it returns to the LDQ,
+        // must win re-arbitration (lsu.scala:817-870), and re-traverse
+        // the pipeline s0->s1->s2.  boomNackRetryCycles (default 0)
+        // delays the retry signal accordingly.  Only apply the delay
+        // when the blocking was MSHR-related (Blocked_NoMSHRs), not
+        // for write-buffer blocking -- BOOM's s2_nack_wb is already
+        // modelled separately via boom_wb_nack_penalty_cycles.
+        Tick when = (mshrRelated &&
+                     cache.boomNackRetryCycles > Cycles(0))
+                    ? cache.clockEdge(cache.boomNackRetryCycles)
+                    : curTick() + 1;
+        cache.schedule(sendRetryEvent, when);
     }
 }
 
@@ -610,6 +668,24 @@ BaseCache::recvTimingResp(PacketPtr pkt)
         ppFill->notify(CacheAccessProbeArg(pkt, accessor));
     }
 
+    // Detect dirty writeback for delayed MSHR deallocation below.
+    // In BOOM's BoomMSHR (mshrs.scala:108,326-405), the MSHR stays
+    // occupied through s_meta_clear -> s_wb_req -> s_wb_resp ->
+    // s_commit_line -> s_drain_rpq -> s_meta_write after serving
+    // load responses from the line buffer. gem5 by default frees the
+    // MSHR immediately after serviceMSHRTargets(), which allows new
+    // misses to use it right away -- making gem5 process store-heavy
+    // conflict patterns (MCS, STL2, MC) much faster than BOOM.
+    bool hasDirtyWb = false;
+    if (!writebacks.empty()) {
+        for (const auto& wb : writebacks) {
+            if (wb->cmd == MemCmd::WritebackDirty) {
+                hasDirtyWb = true;
+                break;
+            }
+        }
+    }
+
     // Don't want to promote the Locked RMW Read until
     // the locked write comes in
     if (!mshr->hasLockedRMWReadTarget()) {
@@ -634,6 +710,100 @@ BaseCache::recvTimingResp(PacketPtr pkt)
         }
     }
 
+    // Count load/store targets in the MSHR before serviceMSHRTargets
+    // deallocates them.  These are added to the post-fill duration to
+    // model BOOM's s_drain_rpq_loads (per-load) and s_drain_rpq (per-
+    // store) phases (mshrs.scala:268-373) -- the variable part of the
+    // FSM that the constants alone could not capture.
+    // Count CPU-issued (non-prefetch) load and store targets in the
+    // MSHR.  BOOM's RPQ excludes prefetches (mshrs.scala:135), so we
+    // mirror that filter to keep the drain counts honest.  Stores arrive
+    // as ReadExReq / writeable-needing packets; needsWritable() catches
+    // that uniformly.
+    unsigned n_load_tgts = 0, n_store_tgts = 0;
+    for (const auto& tgt : mshr->getTargetList()) {
+        if (tgt.source != MSHR::Target::FromCPU) continue;
+        if (!tgt.pkt) continue;
+        if (tgt.pkt->cmd.isSWPrefetch()) continue;
+        if (tgt.pkt->needsWritable()) ++n_store_tgts;
+        else if (tgt.pkt->isRead()) ++n_load_tgts;
+    }
+    const Cycles drainCycles(
+        n_load_tgts * mshrDrainLoadCycles +
+        n_store_tgts * mshrDrainStoreCycles);
+    // BOOM store-bearing MSHR fills hold the slot longer
+    const Cycles storeExtra =
+        (n_store_tgts > 0) ? mshrPostFillStoreExtra : Cycles(0);
+    // BOOM load wakeup retry port contention (lsu.scala:584,1217)
+    Cycles wakeupExtra(0);
+    if (boomFillWakeupExtraHold > Cycles(0) && n_load_tgts > 0) {
+        const bool hasRecentStores =
+            (lastStoreTick > 0 && (curTick() - lastStoreTick) < 2000000);
+        const Tick fillGapThreshold = cyclesToTicks(Cycles(80));
+        const bool pipelineHadHeadroom =
+            (lastWakeupFillTick == 0 ||
+             (curTick() - lastWakeupFillTick) > fillGapThreshold);
+        if (hasRecentStores && pipelineHadHeadroom) {
+            const Cycles fillMissLat = ticksToCycles(
+                curTick() - mshr->getAllocTick());
+            if (boomFillWakeupMissThreshold == Cycles(0) ||
+                fillMissLat <= boomFillWakeupMissThreshold)
+                wakeupExtra = boomFillWakeupExtraHold;
+        }
+    }
+    lastWakeupFillTick = curTick();
+    ++fillsSinceLastStore;
+    const bool isSustainedLoadOnly =
+        (fillsSinceLastStore > 100);
+    const Cycles baseFillCycles =
+        (mshrCleanFillCycles > Cycles(0) && isSustainedLoadOnly)
+        ? mshrCleanFillCycles : mshrPostFillCycles;
+    const Cycles dynamicPostFill(
+        baseFillCycles + drainCycles + storeExtra + wakeupExtra);
+
+    // Detect dirty WB early so serviceMSHRTargets can delay store
+    // targets, matching BOOM's s_drain_rpq (stores) after s_drain_rpq_loads
+    // (loads) separation (mshrs.scala:268-373).
+    fillStoreReplayTick = 0;
+    if (mshrStoreReplayLatency > 0) {
+        for (const auto &wb : writebacks) {
+            if (wb->cmd == MemCmd::WritebackDirty) {
+                Tick earliest = clockEdge(dynamicPostFill);
+                Tick wb_start = std::max(earliest,
+                                         lastDirtyWbCompletionTick);
+                fillStoreReplayTick = wb_start +
+                    cyclesToTicks(mshrStoreReplayLatency);
+                break;
+            }
+        }
+    }
+
+    // Feed observed fill RTT into the BoomWritebackUnit (Option C)
+    // for use as a proxy for L2 backpressure on the s_grant phase.
+    if (enableBoomWbUnit && mshr->hasTargets()) {
+        const Tick origTargetTime = mshr->getTarget()->recvTime;
+        if (origTargetTime > 0 && origTargetTime <= curTick()) {
+            boomWbUnit.observeFillRtt(curTick() - origTargetTime);
+        }
+    }
+    // Phase-b arbiter gating: capture whether the originating miss had
+    // a store target, BEFORE serviceMSHRTargets drains the targets list.
+    // BOOM only contends on wb_arb when the L1 MSHR was allocated for
+    // a store and the evicted line had been previously dirtied (mshrs.
+    // scala req_needs_wb).  Without this gate we over-charge load-only
+    // benches because gem5 spuriously marks load-fetched lines as dirty
+    // (M state) on fill, so writebacks::cmd == WritebackDirty even on
+    // pure-load MSHRs.
+    bool mshrHadStoreTarget = false;
+    if (mshr) {
+        for (const auto &tgt : mshr->getTargetList()) {
+            if (tgt.pkt && (tgt.pkt->isWrite() ||
+                            tgt.pkt->needsWritable())) {
+                mshrHadStoreTarget = true;
+                break;
+            }
+        }
+    }
     serviceMSHRTargets(mshr, pkt, blk);
     // We are stopping servicing targets early for the Locked RMW Read until
     // the write comes.
@@ -647,22 +817,256 @@ BaseCache::recvTimingResp(PacketPtr pkt)
             mshrQueue.markPending(mshr);
             schedMemSideSendEvent(clockEdge() + pkt->payloadDelay);
         } else {
-            // while we deallocate an mshr from the queue we still have to
-            // check the isFull condition before and after as we might
-            // have been using the reserved entries already
-            const bool was_full = mshrQueue.isFull();
-            mshrQueue.deallocate(mshr);
-            if (was_full && !mshrQueue.isFull()) {
-                clearBlocked(Blocked_NoMSHRs);
+            // Check if this fill caused a dirty writeback (BOOM's
+            // L1 MSHR handles dirty WB inline: s_wb_req -> s_wb_resp
+            // adds ~18 cycles vs clean evictions that skip those states).
+            bool hasDirtyWb = false;
+            for (const auto &wb : writebacks) {
+                if (wb->cmd == MemCmd::WritebackDirty) {
+                    hasDirtyWb = true;
+                    break;
+                }
             }
+            // Dirty-WB gated by store target: gem5 grants M (writable)
+            // state on load fills, making evicted lines appear dirty
+            // even for read-only MSHR fills.  BOOM grants Branch
+            // (read-only) via TileLink, so only genuinely written lines
+            // are dirty.  mshrHadStoreTarget proxies this difference.
+            const bool boomDirtyWb = hasDirtyWb && mshrHadStoreTarget;
+            const Cycles totalPostFill = dynamicPostFill +
+                (boomDirtyWb ? mshrDirtyWbPenaltyCycles : Cycles(0));
 
-            // Request the bus for a prefetch if this deallocation freed enough
-            // MSHRs for a prefetch to take place
-            if (prefetcher && mshrQueue.canPrefetch() && !isBlocked()) {
-                Tick next_pf_time = std::max(
-                    prefetcher->nextPrefetchReadyTime(), clockEdge());
-                if (next_pf_time != MaxTick)
-                    schedMemSideSendEvent(next_pf_time);
+            if (totalPostFill > Cycles(0) || mshrFsmWalkEnable) {
+                // Deallocate MSHR immediately (removes from queue so
+                // iterations over allocatedList won't find a target-less
+                // entry), then reserve the slot so isFull() still
+                // reflects the occupied capacity.
+                mshrQueue.deallocate(mshr);
+                mshrQueue.reservePostFillSlot();
+                // Don't clear blocked or trigger prefetch yet --
+                // the slot stays logically occupied.
+
+                Tick release_tick;
+                // Option-A L2-pressure heuristic: when our L1 has many
+                // MSHRs allocated, L2 grants are slow.  Bump the WB
+                // penalty by mshrL2PressureExtraCycles to capture this
+                // backpressure-driven variability that gem5's L2
+                // model under-counts.
+                Cycles effectiveWbPenalty = mshrDirtyWbPenaltyCycles;
+                if (mshrL2PressureMshrThreshold > 0 &&
+                    mshrL2PressureExtraCycles > Cycles(0) &&
+                    static_cast<unsigned>(mshrQueue.numAllocated()) >=
+                        mshrL2PressureMshrThreshold) {
+                    effectiveWbPenalty = Cycles(
+                        mshrDirtyWbPenaltyCycles
+                        + mshrL2PressureExtraCycles);
+                }
+                currentFillEffectiveWbPenalty = effectiveWbPenalty;
+                if (boomDirtyWb && enableBoomWbUnit) {
+                    // Option C: route through BoomWritebackUnit FSM.
+                    // It serializes WBs internally and uses observed
+                    // fill RTT as a proxy for the s_grant phase.
+                    release_tick = boomWbUnit.requestWriteback(
+                        clockEdge(dynamicPostFill),
+                        boomWbUnitRefillCycles,
+                        boomWbUnitGrantBaselineCycles,
+                        clockPeriod());
+                    lastDirtyWbCompletionTick = release_tick;
+                    // Update currentFillEffectiveWbPenalty so the
+                    // per-store offset in cache.cc reflects the WB
+                    // unit's actual cost (release_tick - earliest).
+                    const Tick earliest = clockEdge(dynamicPostFill);
+                    if (release_tick > earliest) {
+                        currentFillEffectiveWbPenalty = ticksToCycles(
+                            release_tick - earliest);
+                    }
+                } else if (boomDirtyWb &&
+                    effectiveWbPenalty > Cycles(0)) {
+                    Tick earliest =
+                        clockEdge(dynamicPostFill);
+                    Tick wb_start = std::max(earliest,
+                                    lastDirtyWbCompletionTick);
+                    release_tick = wb_start +
+                        cyclesToTicks(effectiveWbPenalty);
+                    lastDirtyWbCompletionTick = release_tick;
+                } else {
+                    release_tick = clockEdge(totalPostFill);
+                }
+                // Phase-3: per-state FSM walk through BOOM mshrs.scala
+                // states.  Each shared state contends on a per-cache
+                // arbiter (meta_arb / wb_arb / refill_arb); other
+                // states only add their own cycles.  Counts pending
+                // load/store drains too.  When enabled, the walk
+                // overrides the legacy release_tick computed above.
+                if (mshrFsmWalkEnable) {
+                    // Walk starts from the cycle the fill arrives.
+                    Tick t = clockEdge(Cycles(0));
+
+                    // Drain pending loads (per-load, no shared arb).
+                    if (n_load_tgts > 0) {
+                        t += cyclesToTicks(Cycles(
+                            n_load_tgts * mshrFsmDrainLoadCycles));
+                    }
+
+                    // s_meta_read: meta_arb (1c default).
+                    {
+                        Tick start = std::max(t,
+                                              mshrFsmMetaArbBusyUntil);
+                        Tick end = start + cyclesToTicks(
+                            mshrFsmMetaReadCycles);
+                        mshrFsmMetaArbBusyUntil = end;
+                        t = end;
+                    }
+
+                    // s_meta_resp_1+2: per-MSHR pipeline, no arb.
+                    t += cyclesToTicks(mshrFsmMetaRespCycles);
+
+                    if (boomDirtyWb) {
+                        // s_meta_clear: meta_arb again.
+                        Tick start = std::max(t,
+                                              mshrFsmMetaArbBusyUntil);
+                        Tick end = start + cyclesToTicks(
+                            mshrFsmMetaClearCycles);
+                        mshrFsmMetaArbBusyUntil = end;
+                        t = end;
+
+                        // s_wb_req: wb_arb.
+                        start = std::max(t,
+                                         mshrFsmWbArbBusyUntil);
+                        end = start + cyclesToTicks(
+                            mshrFsmWbReqCycles);
+                        mshrFsmWbArbBusyUntil = end;
+                        t = end;
+
+                        // s_wb_resp: per-MSHR wait, no arb.
+                        t += cyclesToTicks(mshrFsmWbRespCycles);
+                    }
+
+                    // s_commit_line: refill_arb (8c default for mb).
+                    {
+                        Tick start = std::max(t,
+                                              mshrFsmRefillArbBusyUntil);
+                        Tick end = start + cyclesToTicks(
+                            mshrFsmCommitLineCycles);
+                        mshrFsmRefillArbBusyUntil = end;
+                        t = end;
+                    }
+
+                    // s_drain_rpq (stores), no arb.
+                    if (n_store_tgts > 0) {
+                        t += cyclesToTicks(Cycles(
+                            n_store_tgts * mshrFsmDrainStoreCycles));
+                    }
+
+                    // s_meta_write_req: meta_arb.
+                    {
+                        Tick start = std::max(t,
+                                              mshrFsmMetaArbBusyUntil);
+                        Tick end = start + cyclesToTicks(
+                            mshrFsmMetaWriteCycles);
+                        mshrFsmMetaArbBusyUntil = end;
+                        t = end;
+                    }
+
+                    // s_mem_finish_1+2, no arb.
+                    t += cyclesToTicks(mshrFsmMemFinishCycles);
+
+                    // The walk's t is the new release_tick. Take
+                    // max with whatever the legacy path produced, so
+                    // BoomWritebackUnit etc. still apply if enabled.
+                    if (t > release_tick)
+                        release_tick = t;
+                }
+
+                // Phase-b: model L1 MSHR FSM shared-arbiter
+                // contention.  BOOM mb mshrs.scala has meta_arb /
+                // refill_arb / wb_arb that allow only one MSHR at a
+                // time through the s_meta_*/s_wb_req/s_commit_line
+                // phases.  With mshrs=2 this serializes back-to-back
+                // misses on heavy streams (e.g. MCS).  The arbiter is
+                // occupied for mshrFsmArbiterCycles per fill; only
+                // the *contention overage* is added to release_tick
+                // -- with one fill in flight there is no extra cost;
+                // only when a second fill collides with an in-flight
+                // FSM does it pay the wait.
+                // Only fills that BOTH have a dirty WB AND were
+                // triggered by an MSHR with at least one store target
+                // hold wb_arb in BOOM.  Without the store-target check,
+                // gem5 over-charges load-only benches because gem5 marks
+                // load-fetched lines as dirty (M state) on fill, so all
+                // evictions look dirty even when BOOM would have evicted
+                // them clean (no s_wb_req fire, no wb_arb contention).
+                if (boomDirtyWb &&
+                    mshrFsmArbiterCycles > Cycles(0)) {
+                    const Tick arb_burst =
+                        cyclesToTicks(mshrFsmArbiterCycles);
+                    const Tick arb_start = std::max(curTick(),
+                                                    mshrFsmArbiterBusyUntil);
+                    const Tick contention =
+                        arb_start - curTick();   // 0 if uncontended
+                    mshrFsmArbiterBusyUntil = arb_start + arb_burst;
+                    if (contention > 0)
+                        release_tick += contention;
+                }
+                // BOOM s2_nack_wb set-conflict penalty (dcache.scala:730):
+                // When an MSHR fill triggers a dirty writeback AND that
+                // WB targets the same L1D set as the *previous* dirty WB,
+                // BOOM nacks the new miss (s2_nack_wb=true).  The nacked
+                // request retries through the LDQ wakeup queue, adding
+                // pipeline-dependent penalty cycles.  Conflict-miss
+                // workloads (MCS) hit this frequently; sequential stores
+                // (STL2b) almost never do.
+                if (boomDirtyWb &&
+                    boomWbNackPenaltyCycles > Cycles(0)) {
+                    // Compute the evicted line's set index from the
+                    // dirty-WB packet address.
+                    int wbSetIdx = -1;
+                    for (const auto &wb : writebacks) {
+                        if (wb->cmd == MemCmd::WritebackDirty) {
+                            const Addr wbAddr = wb->getAddr();
+                            wbSetIdx = static_cast<int>(
+                                (wbAddr / blkSize) % nackNumSets);
+                            break;
+                        }
+                    }
+                    if (wbSetIdx >= 0 &&
+                        lastDirtyWbSetIndex >= 0 &&
+                        wbSetIdx == lastDirtyWbSetIndex) {
+                        release_tick += cyclesToTicks(
+                            boomWbNackPenaltyCycles);
+                    }
+                    if (wbSetIdx >= 0)
+                        lastDirtyWbSetIndex = wbSetIdx;
+                }
+                // Insert in sorted order so front() is always the
+                // earliest — dirty WBs serialized far into the future
+                // must not block earlier clean-fill releases.
+                auto pos = pendingPostFillReleaseTicks.begin();
+                while (pos != pendingPostFillReleaseTicks.end() &&
+                       *pos <= release_tick)
+                    ++pos;
+                pendingPostFillReleaseTicks.insert(pos, release_tick);
+                if (!mshrPostFillDeallocEvent.scheduled()) {
+                    schedule(mshrPostFillDeallocEvent,
+                             pendingPostFillReleaseTicks.front());
+                } else if (pendingPostFillReleaseTicks.front() <
+                           mshrPostFillDeallocEvent.when()) {
+                    reschedule(mshrPostFillDeallocEvent,
+                               pendingPostFillReleaseTicks.front());
+                }
+            } else {
+                const bool was_full = mshrQueue.isFull();
+                mshrQueue.deallocate(mshr);
+                if (was_full && !mshrQueue.isFull()) {
+                    clearBlocked(Blocked_NoMSHRs);
+                }
+
+                if (prefetcher && mshrQueue.canPrefetch() && !isBlocked()) {
+                    Tick next_pf_time = std::max(
+                        prefetcher->nextPrefetchReadyTime(), clockEdge());
+                    if (next_pf_time != MaxTick)
+                        schedMemSideSendEvent(next_pf_time);
+                }
             }
         }
 
@@ -680,6 +1084,32 @@ BaseCache::recvTimingResp(PacketPtr pkt)
     delete pkt;
 }
 
+void
+BaseCache::processMSHRPostFillRelease()
+{
+    while (!pendingPostFillReleaseTicks.empty() &&
+           pendingPostFillReleaseTicks.front() <= curTick()) {
+        pendingPostFillReleaseTicks.pop_front();
+
+        const bool was_full = mshrQueue.isFull();
+        mshrQueue.releasePostFillSlot();
+        if (was_full && !mshrQueue.isFull()) {
+            clearBlocked(Blocked_NoMSHRs);
+        }
+
+        if (prefetcher && mshrQueue.canPrefetch() && !isBlocked()) {
+            Tick next_pf_time = std::max(
+                prefetcher->nextPrefetchReadyTime(), clockEdge());
+            if (next_pf_time != MaxTick)
+                schedMemSideSendEvent(next_pf_time);
+        }
+    }
+
+    if (!pendingPostFillReleaseTicks.empty()) {
+        schedule(mshrPostFillDeallocEvent,
+                 pendingPostFillReleaseTicks.front());
+    }
+}
 
 Tick
 BaseCache::recvAtomic(PacketPtr pkt)
@@ -1858,6 +2288,17 @@ void
 BaseCache::memInvalidate()
 {
     tags->forEachBlk([this](CacheBlk &blk) { invalidateVisitor(blk); });
+}
+
+void
+BaseCache::resetStats()
+{
+    statistics::Group::resetStats();
+    if (flushOnStatReset) {
+        warn_once("BaseCache %s: writing back dirty blocks on stats reset "
+                  "(flush_on_stat_reset=True)", name());
+        memWriteback();
+    }
 }
 
 bool

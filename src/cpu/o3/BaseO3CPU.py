@@ -76,6 +76,69 @@ class BaseO3CPU(BaseCPU):
         200, "Cache Ports. Constrains stores only."
     )
     cacheLoadPorts = Param.Unsigned(200, "Cache Ports. Constrains loads only.")
+    storePortAtExecute = Param.Bool(
+        False,
+        "Consume a dcache port when a store enters execute, and skip "
+        "port consumption at store writeback.  Models BOOM dcache s0 "
+        "arbitration where store address computation shares the pipeline "
+        "with load execution (lsu.scala:548-600).",
+    )
+    loadPortAtExecute = Param.Bool(
+        False,
+        "Consume a dcache port when a load enters execute (read())."
+        "  Models BOOM dcache pipeline s0 port allocation.",
+    )
+    boomNackLoadRetry = Param.Bool(
+        False,
+        "When true, loads that fail to send because the cache is blocked "
+        "(MSHRs full) are retried next cycle instead of being parked until "
+        "the cache unblocks.  Models BOOM dcache nack-retry behaviour "
+        "(lsu.scala:1219, dcache.scala s0-s2): nacked loads re-enter the "
+        "pipeline each cycle, consuming port bandwidth and competing with "
+        "stores for the shared dcache port.",
+    )
+    boomLoadWakeupModel = Param.Bool(
+        False,
+        "Model BOOM one-load-per-cycle wakeup from blocked queue. "
+        "When True, blocked loads (MSHR nack) drain one per cycle "
+        "instead of all at once, matching BOOM AgePriorityEncoder "
+        "(lsu.scala:436-451). Also disables the store starvation "
+        "timer, relying on natural port contention instead.",
+    )
+    boomNackRetryPipelineCycles = Param.Unsigned(
+        0,
+        "Cooldown cycles between blocked-load wakeups when "
+        "boomLoadWakeupModel is True.  Models BOOM nack-retry "
+        "pipeline depth: s2_nack -> LDQ -> AgePriorityEncoder -> "
+        "s0 -> s1 -> s2 (~4 cycles, lsu.scala:817-870).  "
+        "0 means drain one per scheduling cycle (no cooldown).",
+    )
+    boomNackRetryLoadExtraCycles = Param.Unsigned(
+        0,
+        "Per-blocked-load extra cycles added to the cache-unblock "
+        "retry delay.  Models BOOM nack-retry port contention: each "
+        "blocked load must independently traverse the dcache pipeline "
+        "(lsu.scala:574-585 will_fire_load_wakeup lowest priority).  "
+        "Total delay = N_blocked * extra_cycles before loads retry.",
+    )
+    storeToLoadForwardingLatency = Param.Cycles(
+        0, "Extra latency for store-to-load forwarding (BOOM dcache s1/s2)."
+    )
+    boom_div_early_out = Param.Bool(
+        False, "Enable early-out for BOOM structural integer divider."
+    )
+    boom_div_unroll = Param.Unsigned(
+        1, "Unroll factor for BOOM structural integer divider."
+    )
+    boom_div_xlen = Param.Unsigned(
+        64, "Register width for BOOM structural integer divider."
+    )
+    boom_div_pipeline_cycles = Param.Unsigned(
+        0, "Pipeline wrapper cycles for BOOM structural integer divider."
+    )
+    nBPDOverrideBubbles = Param.Unsigned(
+        0, "BPD override bubble cycles when TAGE overrides BTB at F3."
+    )
 
     # Backward pipeline delays
     fetchToBacDelay = Param.Cycles(1, "Fetch to Branch address calc. delay")

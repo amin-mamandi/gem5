@@ -98,6 +98,7 @@ FTQ::resetState(ThreadID tid)
 {
     ftq[tid].clear();
     ftqStatus[tid] = Valid;
+    overrideBubbleUntilTick[tid] = 0;
 }
 
 std::string
@@ -204,6 +205,7 @@ FTQ::squash(ThreadID tid)
     }
     ftq[tid].clear();
     ftqStatus[tid] = Valid;
+    overrideBubbleUntilTick[tid] = 0;
     stats.squashes++;
 }
 
@@ -218,6 +220,8 @@ FTQ::squashSanityCheck(ThreadID tid)
 bool
 FTQ::isHeadReady(ThreadID tid)
 {
+    if (curTick() < overrideBubbleUntilTick[tid])
+        return false;
     return (ftqStatus[tid] != Invalid) && (ftq[tid].size() > 0);
 }
 
@@ -256,6 +260,17 @@ FTQ::popHead(ThreadID tid)
                 ftq[tid].front()->ftNum());
         ftqStatus[tid] = Invalid;
         ret_val = false;
+    }
+
+    // BOOM F3 BPD override: after consuming an FT whose BPD overrode
+    // the BTB, stall fetch for the specified cycles to model the
+    // F1/F2 pipeline squash (frontend.scala:845-853).
+    if (ftq[tid].front()->bpdOverrideBubbleCycles > 0) {
+        overrideBubbleUntilTick[tid] = curTick() +
+            cpu->clockPeriod() * ftq[tid].front()->bpdOverrideBubbleCycles;
+        DPRINTF(FTQ, "Pop FT:[fn%llu] BPD override bubble, "
+                "stalling fetch until tick %llu\n",
+                ftq[tid].front()->ftNum(), overrideBubbleUntilTick[tid]);
     }
 
     ppFTQRemove->notify(ftq[tid].front());

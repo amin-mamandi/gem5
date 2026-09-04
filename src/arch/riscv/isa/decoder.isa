@@ -431,13 +431,26 @@ decode QUADRANT default Unknown::unknown() {
         }
         0x4: decode CFUNCT1 {
             0x0: decode RC2 {
-                0x0: CJump::c_jr({{
-                    if (RC1 == 0) {
-                        return std::make_shared<IllegalInstFault>(
-                                "source reg x0", machInst);
-                    }
-                    NPC = rvSext(Rc1 & (~0x1));
-                }}, IsIndirectControl, IsUncondControl);
+                // c.jr -- split by RC1 to set IsReturn for the RAS
+                // when rs1 is a link register (BOOM decode.scala:695)
+                0x0: decode RC1 {
+                    // rs1 = x1 (ra): return -- pop RAS
+                    1: CJump::c_jr_ret({{
+                        NPC = rvSext(Rc1 & (~0x1));
+                    }}, IsIndirectControl, IsUncondControl, IsReturn);
+                    // rs1 = x5 (t0): return -- pop RAS
+                    5: CJump::c_jr_ret5({{
+                        NPC = rvSext(Rc1 & (~0x1));
+                    }}, IsIndirectControl, IsUncondControl, IsReturn);
+                    // rs1 = other: plain indirect jump
+                    default: CJump::c_jr({{
+                        if (RC1 == 0) {
+                            return std::make_shared<IllegalInstFault>(
+                                    "source reg x0", machInst);
+                        }
+                        NPC = rvSext(Rc1 & (~0x1));
+                    }}, IsIndirectControl, IsUncondControl);
+                }
                 default: CROp::c_mv({{
                     // RC1 == 0 is HINT
                     Rc1 = rvSext(Rc2);
@@ -3267,7 +3280,7 @@ decode QUADRANT default Unknown::unknown() {
                             ui.ui = ((uint64_t)Rs2) << 32;
                             ui.ui |= (uint32_t)Rs1;
                             Fd_bits = freg(f64(ui.ui)).v;
-                        }}, FloatCvtOp);
+                        }}, IntToFloatOp);
                     }
                 }
                 0x60: decode CONV_SGN {
@@ -3413,20 +3426,20 @@ decode QUADRANT default Unknown::unknown() {
                         freg_t fd;
                         fd = freg(i32_to_f32(Rs1_sw));
                         Fd_bits = fd.v;
-                        }}, FloatCvtOp);
+                        }}, IntToFloatOp);
                     0x1: fcvt_s_wu({{
                         RM_REQUIRED;
                         freg_t fd;
                         fd = freg(ui32_to_f32(Rs1_uw));
                         Fd_bits = fd.v;
-                        }}, FloatCvtOp);
+                        }}, IntToFloatOp);
                     0x2: decode RVTYPE {
                         0x1: fcvt_s_l({{
                             RM_REQUIRED;
                             freg_t fd;
                             fd = freg(i64_to_f32(Rs1_ud));
                             Fd_bits = fd.v;
-                        }}, FloatCvtOp);
+                        }}, IntToFloatOp);
                     }
                     0x3: decode RVTYPE {
                         0x1: fcvt_s_lu({{
@@ -3434,7 +3447,7 @@ decode QUADRANT default Unknown::unknown() {
                             freg_t fd;
                             fd = freg(ui64_to_f32(Rs1));
                             Fd_bits = fd.v;
-                        }}, FloatCvtOp);
+                        }}, IntToFloatOp);
                     }
                 }
                 0x69: decode CONV_SGN {
@@ -3443,20 +3456,20 @@ decode QUADRANT default Unknown::unknown() {
                         freg_t fd;
                         fd = freg(i32_to_f64(Rs1_sw));
                         Fd_bits = fd.v;
-                    }}, FloatCvtOp);
+                    }}, IntToFloatOp);
                     0x1: fcvt_d_wu({{
                         RM_REQUIRED;
                         freg_t fd;
                         fd = freg(ui32_to_f64(Rs1_uw));
                         Fd_bits = fd.v;
-                    }}, FloatCvtOp);
+                    }}, IntToFloatOp);
                     0x2: decode RVTYPE {
                         0x1: fcvt_d_l({{
                             RM_REQUIRED;
                             freg_t fd;
                             fd = freg(i64_to_f64(Rs1_sd));
                             Fd_bits = fd.v;
-                        }}, FloatCvtOp);
+                        }}, IntToFloatOp);
                     }
                     0x3: decode RVTYPE {
                         0x1: fcvt_d_lu({{
@@ -3464,7 +3477,7 @@ decode QUADRANT default Unknown::unknown() {
                             freg_t fd;
                             fd = freg(ui64_to_f64(Rs1));
                             Fd_bits = fd.v;
-                        }}, FloatCvtOp);
+                        }}, IntToFloatOp);
                     }
                 }
                 0x6a: decode CONV_SGN {
@@ -3473,20 +3486,20 @@ decode QUADRANT default Unknown::unknown() {
                         freg_t fd;
                         fd = freg(i32_to_f16((int32_t)Rs1_sw));
                         Fd_bits = fd.v;
-                        }}, FloatCvtOp);
+                        }}, IntToFloatOp);
                     0x1: fcvt_h_wu({{
                         RM_REQUIRED;
                         freg_t fd;
                         fd = freg(ui32_to_f16((uint32_t)Rs1_uw));
                         Fd_bits = fd.v;
-                        }}, FloatCvtOp);
+                        }}, IntToFloatOp);
                     0x2: decode RVTYPE {
                         0x1: fcvt_h_l({{
                             RM_REQUIRED;
                             freg_t fd;
                             fd = freg(i64_to_f16(Rs1_ud));
                             Fd_bits = fd.v;
-                            }}, FloatCvtOp);
+                            }}, IntToFloatOp);
                     }
                     0x3: decode RVTYPE {
                         0x1: fcvt_h_lu({{
@@ -3494,7 +3507,7 @@ decode QUADRANT default Unknown::unknown() {
                             freg_t fd;
                             fd = freg(ui64_to_f16(Rs1));
                             Fd_bits = fd.v;
-                            }}, FloatCvtOp);
+                            }}, IntToFloatOp);
                     }
                 }
                 0x70: decode ROUND_MODE {
@@ -3546,7 +3559,7 @@ decode QUADRANT default Unknown::unknown() {
                             freg_t fd;
                             fd = freg(f32(Rs1_uw));
                             Fd_bits = fd.v;
-                        }}, FloatCvtOp);
+                        }}, IntToFloatOp);
                         0x01: fli_s({{
                             static const uint32_t imm[32] = {
                                 [0b00000] = 0xbf800000,  /* -1.0 */
@@ -3595,7 +3608,7 @@ decode QUADRANT default Unknown::unknown() {
                             freg_t fd;
                             fd = freg(f64(Rs1));
                             Fd_bits = fd.v;
-                        }}, FloatCvtOp);
+                        }}, IntToFloatOp);
                     }
                     0x01: fli_d({{
                         static const uint64_t imm[32] = {
@@ -3649,7 +3662,7 @@ decode QUADRANT default Unknown::unknown() {
                         freg_t fd;
                         fd = freg(f16(Rs1_uh));
                         Fd_bits = fd.v;
-                    }}, FloatCvtOp);
+                    }}, IntToFloatOp);
                     0x01:fli_h({{
                         static const uint16_t imm[32] = {
                             [0b00000] = 0xbc00,  /* -1.0 */
@@ -6063,17 +6076,59 @@ decode QUADRANT default Unknown::unknown() {
             }
         }
 
+        // JALR -- split by RD and RS1 to set IsCall / IsReturn for
+        // the RAS, matching BOOM decode.scala:694-695:
+        //   is_call := (is_jal || is_jalr) && GetRd(inst) === RA
+        //   is_ret  := is_jalr && GetRs1(inst) === BitPat("b00?01")
+        //              && GetRd(inst) === X0
         0x19: decode FUNCT3 {
-            0x0: Jump::jalr({{
-                Rd = rvSext(NPC);
-                NPC = rvSext((imm + Rs1) & (~0x1));
-            }}, IsIndirectControl, IsUncondControl);
+            0x0: decode RD {
+                // rd = x1 (ra): call -- push return address onto RAS
+                1: Jump::jalr_call({{
+                    Rd = rvSext(NPC);
+                    NPC = rvSext((imm + Rs1) & (~0x1));
+                }}, IsIndirectControl, IsUncondControl, IsCall);
+                // rd = x0: no link -- check rs1 for return hint
+                0: decode RS1 {
+                    // rs1 = x1 (ra): return -- pop RAS
+                    1: Jump::jalr_ret({{
+                        Rd = rvSext(NPC);
+                        NPC = rvSext((imm + Rs1) & (~0x1));
+                    }}, IsIndirectControl, IsUncondControl, IsReturn);
+                    // rs1 = x5 (t0): return -- pop RAS
+                    5: Jump::jalr_ret5({{
+                        Rd = rvSext(NPC);
+                        NPC = rvSext((imm + Rs1) & (~0x1));
+                    }}, IsIndirectControl, IsUncondControl, IsReturn);
+                    // rs1 = other: plain indirect jump (jr)
+                    default: Jump::jalr_jr({{
+                        Rd = rvSext(NPC);
+                        NPC = rvSext((imm + Rs1) & (~0x1));
+                    }}, IsIndirectControl, IsUncondControl);
+                }
+                // rd = other: plain indirect jump-and-link
+                default: Jump::jalr({{
+                    Rd = rvSext(NPC);
+                    NPC = rvSext((imm + Rs1) & (~0x1));
+                }}, IsIndirectControl, IsUncondControl);
+            }
         }
 
-        0x1b: JOp::jal({{
-            Rd = rvSext(NPC);
-            NPC = rvSext(PC + imm);
-        }}, IsDirectControl, IsUncondControl);
+        // JAL -- split by RD to set IsCall for the RAS,
+        // matching BOOM decode.scala:694:
+        //   is_call := (is_jal || is_jalr) && GetRd(inst) === RA
+        0x1b: decode RD {
+            // rd = x1 (ra): call -- push return address onto RAS
+            1: JOp::jal_call({{
+                Rd = rvSext(NPC);
+                NPC = rvSext(PC + imm);
+            }}, IsDirectControl, IsUncondControl, IsCall);
+            // rd = other: plain unconditional jump (j / jal)
+            default: JOp::jal({{
+                Rd = rvSext(NPC);
+                NPC = rvSext(PC + imm);
+            }}, IsDirectControl, IsUncondControl);
+        }
 
         0x1c: decode FUNCT3 {
             format SystemOp {

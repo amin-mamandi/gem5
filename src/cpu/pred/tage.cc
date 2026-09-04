@@ -141,7 +141,27 @@ TAGE::updateHistories(ThreadID tid, Addr pc, bool uncond, bool taken,
         predict(tid, pc, false, bp_history);
     }
 
-    // Update the global history for all branches
+    // BOOM GlobalHistory.update() (frontend.scala:82-125) only shifts
+    // the GHR (old_history) for conditional branches:
+    //   new_history.old_history := Mux(cfi_is_br && cfi_taken && cfi_valid,
+    //                                  histories(0) << 1 | 1.U,
+    //                              Mux(saw_not_taken_branch,
+    //                                  histories(0) << 1,
+    //                                  histories(0)))
+    // Unconditional branches (JAL, JALR, returns, calls) never set
+    // cfi_is_br, so they leave old_history unchanged.  gem5's TAGE was
+    // shifting a taken-bit into the GHR for every branch, polluting the
+    // TAGE index/tag computation with spurious unconditional-branch bits.
+    // This causes aliasing in TAGE tables and extra mispredictions on
+    // benchmarks with many conditional branches interleaved with
+    // unconditional control flow (CCm, CCe, CCl, CRf).
+    //
+    // The history entry is already allocated by predict() above (for
+    // squash recovery); bi->modified stays false, so squash() correctly
+    // does nothing for these branches.
+    if (uncond)
+        return;
+
     TageBranchInfo *bi = static_cast<TageBranchInfo*>(bp_history);
     tage->updateHistories(tid, pc, true, taken, target, inst,
                           bi->tageBranchInfo);

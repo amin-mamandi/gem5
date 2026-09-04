@@ -54,6 +54,7 @@ class OpClass(Enum):
         "FloatDiv",
         "FloatMisc",
         "FloatSqrt",
+        "IntToFloat",
         "SimdAdd",
         "SimdAddAcc",
         "SimdAlu",
@@ -155,3 +156,10 @@ class FUDesc(SimObject):
 
     count = Param.Int("number of these FU's available")
     opList = VectorParam.OpDesc("operation classes for this FU type")
+    # BOOM-faithful writeback (iresp) port grouping.  FUs sharing an
+    # iresp_group identifier contend on a single writeback port: at most
+    # one FU per group can complete its writeback per cycle.  Default 0
+    # means "no contention modelling" (existing behaviour).  Used to
+    # model BOOM v3's per-execution-unit iresp PriorityMux that arbitrates
+    # between ALU/CSR/DIV in the same exu (functional-unit.scala).
+    iresp_group = Param.Int(0, "Shared writeback-port group ID; 0 disables")

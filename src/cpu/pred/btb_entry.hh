@@ -183,26 +183,32 @@ class BTBEntry : public ReplaceableEntry
     insert(const KeyType &key)
     {
         setValid();
+        consecutiveNotTaken = 0;
+        resetCount = 0;
         setTag({extractTag(key.address), key.tid});
     }
 
     /** Copy constructor */
     BTBEntry(const BTBEntry &other)
     {
-        valid      = other.valid;
-        tag        = other.tag;
-        inst       = other.inst;
-        extractTag = other.extractTag;
+        valid            = other.valid;
+        tag              = other.tag;
+        inst             = other.inst;
+        extractTag       = other.extractTag;
+        consecutiveNotTaken = other.consecutiveNotTaken;
+        resetCount       = other.resetCount;
         set(target, other.target);
     }
 
     /** Assignment operator */
     BTBEntry& operator=(const BTBEntry &other)
     {
-        valid      = other.valid;
-        tag        = other.tag;
-        inst       = other.inst;
-        extractTag = other.extractTag;
+        valid            = other.valid;
+        tag              = other.tag;
+        inst             = other.inst;
+        extractTag       = other.extractTag;
+        consecutiveNotTaken = other.consecutiveNotTaken;
+        resetCount       = other.resetCount;
         set(target, other.target);
 
         return *this;
@@ -223,6 +229,8 @@ class BTBEntry : public ReplaceableEntry
     invalidate()
     {
         valid = false;
+        consecutiveNotTaken = 0;
+        resetCount = 0;
         setTag({MaxAddr, -1});
     }
 
@@ -231,6 +239,17 @@ class BTBEntry : public ReplaceableEntry
 
     /** Pointer to the static branch inst at this address */
     StaticInstPtr inst;
+
+    /** Consecutive not-taken commit count for BPD override bubble
+     *  suppression.  Reset on taken commit or BTB re-insertion.
+     */
+    uint16_t consecutiveNotTaken = 0;
+
+    /** How many times update() was called while the entry already
+     *  existed (re-taken at squash time).  Filters out never-taken
+     *  warmup entries whose counter grows monotonically.
+     */
+    uint8_t resetCount = 0;
 
     std::string
     print() const override

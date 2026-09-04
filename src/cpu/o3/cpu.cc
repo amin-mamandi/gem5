@@ -72,6 +72,10 @@ namespace o3
 
 CPU::CPU(const BaseO3CPUParams &params)
     : BaseCPU(params),
+            boomDivEarlyOut(params.boom_div_early_out),
+      boomDivUnroll(params.boom_div_unroll),
+      boomDivXlen(params.boom_div_xlen),
+      boomDivPipelineCycles(params.boom_div_pipeline_cycles),
       mmu(params.mmu),
       tickEvent([this] { tick(); }, "O3CPU tick", false, Event::CPU_Tick_Pri),
       threadExitEvent([this] { exitThreads(); }, "O3CPU exit threads", false,

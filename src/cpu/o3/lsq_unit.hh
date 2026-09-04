@@ -471,6 +471,25 @@ class LSQUnit
      */
     unsigned depCheckShift;
 
+    /** Latency (cycles) for store-to-load forwarding.
+     *  BOOM dcache pipeline s0->s1->s2 = 2 cycles; gem5 defaults to 0. */
+    Cycles storeToLoadForwardingLatency;
+
+    /** When true, every load entering read() consumes a dcache port,
+     *  matching BOOM's dcache pipeline where s0 allocates the port
+     *  before hit/miss/nack/forward resolution at s2. */
+    bool loadPortAtExecute;
+    /** When true, store address computation consumes a dcache port,
+     *  and store writeback skips port consumption.  Models BOOM dcache
+     *  s0 where store-addr shares the pipeline with load execution,
+     *  while store data writeback uses a separate write path. */
+    bool storePortAtExecute;
+    /** When true, loads nacked by a blocked cache (MSHRs full) are
+     *  retried next cycle rather than parked in the blocked-load list.
+     *  Models BOOM dcache nack-retry: nacked loads re-enter the
+     *  pipeline, consuming port bandwidth (lsu.scala:1219). */
+    bool boomNackLoadRetry;
+
     /** Should loads be checked for dependency issues */
     bool checkLoads;
 

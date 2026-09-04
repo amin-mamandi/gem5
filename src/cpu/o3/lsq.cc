@@ -110,8 +110,11 @@ LSQ::DcachePort::DcachePortStats::DcachePortStats(CPU* _cpu)
 LSQ::LSQ(CPU *cpu_ptr, IEW *iew_ptr, const BaseO3CPUParams &params)
     : cpu(cpu_ptr), iewStage(iew_ptr),
       _cacheBlocked(false),
+      boomLoadWakeupModel(params.boomLoadWakeupModel),
       cacheStorePorts(params.cacheStorePorts), usedStorePorts(0),
       cacheLoadPorts(params.cacheLoadPorts), usedLoadPorts(0),
+      _blockedLoadCount(0), _storeBlockedAccumulator(0),
+      _loadWakeupPriorityTimer(0), _storeStarvationCounter(0),
       waitingForStaleTranslation(false),
       staleTranslationWaitTxnId(0),
       lsqPolicy(params.smtLSQPolicy),
@@ -212,6 +215,10 @@ LSQ::takeOverFrom()
 {
     usedStorePorts = 0;
     _cacheBlocked = false;
+    _blockedLoadCount = 0;
+    _storeBlockedAccumulator = 0;
+    _loadWakeupPriorityTimer = 0;
+    _storeStarvationCounter = 0;
 
     for (ThreadID tid = 0; tid < numThreads; tid++) {
         thread[tid].takeOverFrom();
@@ -221,12 +228,39 @@ LSQ::takeOverFrom()
 void
 LSQ::tick()
 {
-    // Re-issue loads which got blocked on the per-cycle load ports limit.
-    if (usedLoadPorts == cacheLoadPorts && !_cacheBlocked)
+    // Re-issue loads which got blocked on the per-cycle port limit.
+    // BOOM shares a single dcache port between loads and stores,
+    // so check the combined budget (lsu.scala:548-585).
+    if ((usedLoadPorts + usedStorePorts) >= cacheLoadPorts && !_cacheBlocked)
         iewStage->cacheUnblocked();
 
     usedLoadPorts = 0;
     usedStorePorts = 0;
+
+    // BOOM load_wakeup priority model (lsu.scala:548-600, 1224-1241):
+    // While cache is blocked with pending NACKed loads, accumulate
+    // store-blocked cycles.  In BOOM, each such cycle has a NACKed load
+    // retrying via load_wakeup (priority 11), consuming the dcache port
+    // and starving store_commit (priority 12).
+    if (_cacheBlocked && _blockedLoadCount > 0)
+        _storeBlockedAccumulator++;
+
+    // Apply accumulated store-blocking timer.  Only count down when
+    // cache is NOT blocked — during blocked periods stores are already
+    // stalled by _cacheBlocked, so the timer budget must not be wasted.
+    // This ensures the accumulated debt is applied entirely during
+    // unblocked windows, matching BOOM's behavior where load_wakeup
+    // retries starve store_commit even after MSHRs free up.
+    if (_loadWakeupPriorityTimer > 0 && !_cacheBlocked) {
+        _loadWakeupPriorityTimer--;
+        _storeStarvationCounter++;
+        // BOOM store_blocked_counter starvation relief (lsu.scala:1228-1241):
+        // after 15 consecutive blocked cycles, allow 1 store through.
+        if (_storeStarvationCounter >= 16)
+            _storeStarvationCounter = 0;
+    } else if (!_cacheBlocked) {
+        _storeStarvationCounter = 0;
+    }
 }
 
 bool
@@ -244,13 +278,23 @@ LSQ::cacheBlocked(bool v)
 bool
 LSQ::cachePortAvailable(bool is_load) const
 {
-    bool ret;
-    if (is_load) {
-        ret  = usedLoadPorts < cacheLoadPorts;
-    } else {
-        ret  = usedStorePorts < cacheStorePorts;
-    }
-    return ret;
+    // BOOM's LSU (lsu.scala:548-585) uses a single dc_avail flag per
+    // memWidth slot. Loads and stores share the dcache port budget.
+    // Only ONE dcache operation fires per cycle per memWidth slot.
+    // Store commits have lowest priority (lsu.scala:585).
+    if ((usedLoadPorts + usedStorePorts) >= cacheLoadPorts)
+        return false;
+
+    // Model BOOM load_wakeup (priority 11) starving store_commit
+    // (priority 12) after cache unblocks (lsu.scala:548-600, 1224-1241).
+    // While the timer is active, retrying loads would monopolize the
+    // dcache port in BOOM; block store commits to match.
+    // Allow 1 store every 16 cycles (starvation relief, lsu.scala:1228-1241).
+    if (!is_load && _loadWakeupPriorityTimer > 0
+            && _storeStarvationCounter < 15)
+        return false;
+
+    return true;
 }
 
 void
@@ -420,6 +464,18 @@ LSQ::setLastRetiredHtmUid(ThreadID tid, uint64_t htmUid)
 void
 LSQ::recvReqRetry()
 {
+    // Model BOOM load_wakeup priority (lsu.scala:548-600, 1224-1241):
+    // While cache was blocked, NACKed loads in BOOM would have been
+    // retrying via load_wakeup every cycle, consuming the dcache port
+    // and starving store_commit.  Transfer the accumulated debt to the
+    // timer so stores are blocked for an equivalent number of cycles
+    // after unblock.
+    if (_storeBlockedAccumulator > 0) {
+        _loadWakeupPriorityTimer += _storeBlockedAccumulator;
+        _storeBlockedAccumulator = 0;
+    }
+    _blockedLoadCount = 0;
+
     iewStage->cacheUnblocked();
     cacheBlocked(false);
 

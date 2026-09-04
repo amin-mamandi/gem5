@@ -98,6 +98,18 @@ class BranchTargetBuffer : public ClockedObject
                           BranchType type = BranchType::NoBranch,
                           StaticInstPtr inst = nullptr) = 0;
 
+    /** Mark a BTB entry to suppress BPD override bubbles.
+     *  Models BOOM's BIM/F1-BPD learning: after a conditional branch
+     *  resolves not-taken, the F1 predictor would also predict
+     *  not-taken on the next encounter, so no F1 redirect occurs
+     *  and no F3 override bubble is needed.
+     */
+    virtual void setOverrideSuppress(ThreadID tid, Addr inst_pc,
+                                     bool suppress) = 0;
+
+    /** Check whether a BTB entry has BPD override suppressed. */
+    virtual bool isOverrideSuppressed(ThreadID tid, Addr inst_pc) = 0;
+
     /** Update BTB statistics
      */
     virtual void incorrectTarget(Addr inst_pc,
