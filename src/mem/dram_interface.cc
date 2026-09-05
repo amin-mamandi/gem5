@@ -59,6 +59,136 @@ namespace memory
 std::pair<MemPacketQueue::iterator, Tick>
 DRAMInterface::chooseNextFRFCFS(MemPacketQueue& queue, Tick min_col_at) const
 {
+    // === DETERMINISTIC MEMORY PRIORITISATION ===
+    //
+    // Deterministic requests are identified by the DETERMINISTIC flag the
+    // page table walker put on the request, which MemPacket carries as
+    // isDeterministic.  Selecting on that rather than on the bank number
+    // means the guest does not have to place deterministic pages in any
+    // particular bank for the mechanism to work.
+    //
+    // A best-effort request is let through once dm_req_srv_thresh
+    // deterministic requests have been served back to back, so best-effort
+    // traffic cannot be starved indefinitely.
+    if (system()->dmPrioritize) {
+        bool be_req_exist = false;
+
+        // Round-robin cursor over the banks that deterministic requests are
+        // targeting, so DM traffic still spreads across banks.
+        for (auto i = queue.begin(); i != queue.end(); ++i) {
+            MemPacket* pkt = *i;
+            if (pkt->pseudoChannel == pseudoChannel && !pkt->isDeterministic) {
+                be_req_exist = true;
+                break;
+            }
+        }
+
+        const bool dm_allowed =
+            !(be_req_exist && dm_req_srv_count >= dm_req_srv_thresh);
+
+        if (dm_allowed) {
+            // First pass: a deterministic request in a bank that has not had
+            // its turn in this round.
+            for (auto i = queue.begin(); i != queue.end(); ++i) {
+                MemPacket* pkt = *i;
+                if (pkt->pseudoChannel != pseudoChannel) continue;
+                if (!pkt->isDeterministic) continue;
+                if (!burstReady(pkt)) continue;
+
+                if (bankmaskSaved & (1ULL << pkt->bank)) {
+                    bankmaskSaved &= ~(1ULL << pkt->bank);
+                    dm_req_srv_count++;
+
+                    const Bank& bank = ranks[pkt->rank]->banks[pkt->bank];
+                    Tick col_at = pkt->isRead() ? bank.rdAllowedAt
+                                                : bank.wrAllowedAt;
+                    DPRINTF(DetMem, "DM request selected (RR) bank %d, "
+                            "col_at: %llu\n", pkt->bank, col_at);
+                    return std::make_pair(i, col_at);
+                }
+            }
+
+            // Second pass: any ready deterministic request. Refill the
+            // round-robin cursor so the next round starts fresh.
+            for (auto i = queue.begin(); i != queue.end(); ++i) {
+                MemPacket* pkt = *i;
+                if (pkt->pseudoChannel != pseudoChannel) continue;
+                if (!pkt->isDeterministic) continue;
+                if (!burstReady(pkt)) continue;
+
+                bankmaskSaved = ~uint64_t(0);
+                dm_req_srv_count++;
+                const Bank& bank = ranks[pkt->rank]->banks[pkt->bank];
+                Tick col_at = pkt->isRead() ? bank.rdAllowedAt
+                                            : bank.wrAllowedAt;
+                DPRINTF(DetMem, "DM request selected bank %d, col_at: %llu\n",
+                        pkt->bank, col_at);
+                return std::make_pair(i, col_at);
+            }
+        }
+
+        // Nothing deterministic served this time: start a new window.
+        dm_req_srv_count = 0;
+        bankmaskSaved = ~uint64_t(0);
+        DPRINTF(DetMem, "No deterministic request served, resetting window\n");
+    }
+    // === END DETERMINISTIC MEMORY PRIORITISATION ===
+
+    // === EXISTING FRFCFS LOGIC (UNCHANGED) ===
+    std::vector<uint32_t> earliest_banks(ranksPerChannel, 0);
+    bool filled_earliest_banks = false;
+    bool hidden_bank_prep = false;
+    bool found_hidden_bank = false;
+    bool found_prepped_pkt = false;
+    bool found_earliest_pkt = false;
+
+    Tick selected_col_at = MaxTick;
+    auto selected_pkt_it = queue.end();
+
+    for (auto i = queue.begin(); i != queue.end() ; ++i) {
+        MemPacket* pkt = *i;
+
+        if (pkt->isDram() && (pkt->pseudoChannel == pseudoChannel)) {
+            const Bank& bank = ranks[pkt->rank]->banks[pkt->bank];
+            const Tick col_allowed_at = pkt->isRead() ? bank.rdAllowedAt :
+                bank.wrAllowedAt;
+
+            if (burstReady(pkt)) {
+                if (bank.openRow == pkt->row) {
+                    if (col_allowed_at <= min_col_at) {
+                        selected_pkt_it = i;
+                        selected_col_at = col_allowed_at;
+                        break;
+                    } else if (!found_hidden_bank && !found_prepped_pkt) {
+                        selected_pkt_it = i;
+                        selected_col_at = col_allowed_at;
+                        found_prepped_pkt = true;
+                    }
+                } else if (!found_earliest_pkt) {
+                    if (!filled_earliest_banks) {
+                        std::tie(earliest_banks, hidden_bank_prep) =
+                                minBankPrep(queue, min_col_at);
+                        filled_earliest_banks = true;
+                    }
+
+                    if (bits(earliest_banks[pkt->rank], pkt->bank,
+                            pkt->bank)) {
+                        found_earliest_pkt = true;
+                        found_hidden_bank = hidden_bank_prep;
+
+                        if (hidden_bank_prep || !found_prepped_pkt) {
+                            selected_pkt_it = i;
+                            selected_col_at = col_allowed_at;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return std::make_pair(selected_pkt_it, selected_col_at);
+    // DETMEM
+    /*
     std::vector<uint32_t> earliest_banks(ranksPerChannel, 0);
 
     // Has minBankPrep been called to populate earliest_banks?
@@ -169,6 +299,7 @@ DRAMInterface::chooseNextFRFCFS(MemPacketQueue& queue, Tick min_col_at) const
     }
 
     return std::make_pair(selected_pkt_it, selected_col_at);
+    */
 }
 
 void
@@ -835,6 +966,12 @@ MemPacket*
 DRAMInterface::decodePacket(const PacketPtr pkt, Addr pkt_addr,
                        unsigned size, bool is_read, uint8_t pseudo_channel)
 {
+    // DETMEM: Check if this is a deterministic packet
+    bool is_deterministic = false;
+    if (pkt->req->isDeterministic()) {
+        is_deterministic = true;
+    }
+
     // decode the address based on the address mapping scheme, with
     // Ro, Ra, Co, Ba and Ch denoting row, rank, column, bank and
     // channel, respectively
@@ -914,7 +1051,8 @@ DRAMInterface::decodePacket(const PacketPtr pkt, Addr pkt_addr,
     uint16_t bank_id = banksPerRank * rank + bank;
 
     return new MemPacket(pkt, is_read, true, pseudo_channel, rank, bank, row,
-                   bank_id, pkt_addr, size);
+                   // DETMEM
+                   bank_id, pkt_addr, size, is_deterministic);
 }
 
 void DRAMInterface::setupRank(const uint8_t rank, const bool is_read)

@@ -104,7 +104,7 @@ class PMP : public SimObject
         /** addr range corresponding to a single pmp entry */
         AddrRange pmpAddr = AddrRange(0, 0);
         /** raw addr in pmpaddr register for a pmp entry */
-        Addr rawAddr;
+        Addr rawAddr = 0;
         /** pmpcfg reg value for a pmp entry */
         uint8_t pmpCfg = 0;
     };
@@ -113,6 +113,17 @@ class PMP : public SimObject
     std::vector<PmpEntry> pmpTable;
 
   public:
+    /**
+     * Save and restore the PMP configuration.
+     *
+     * Only the raw register state is written out; the address ranges and the
+     * active rule count are derived from it by pmpUpdateRule().  Without
+     * this, a restored machine comes up with numRules == 0, which makes
+     * pmpCheck() fault every S-mode and U-mode access.
+     */
+    void serialize(CheckpointOut &cp) const override;
+    void unserialize(CheckpointIn &cp) override;
+
     /**
      * pmpCheck checks if a particular memory access
      * is allowed based on the pmp rules.

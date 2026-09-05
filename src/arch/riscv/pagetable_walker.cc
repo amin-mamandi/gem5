@@ -784,6 +784,13 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
                         entry.logBytes = PageShift +
                                         (level * SV39_LEVEL_BITS);
                         entry.vaddr &= ~((1 << entry.logBytes) - 1);
+                        // DETMEM
+                        if (pte.mt) {
+                            entry.deterministic = true;
+                            DPRINTF(DetPTW, "Setting deterministic memory "
+                                    "flag for entry at vpn %#x\n",
+                                    entry.vaddr);
+                        }
                     }
 
                     // put it non-writable into the TLB to detect
@@ -1140,8 +1147,19 @@ Walker::WalkerState::recvPacket(PacketPtr pkt)
             vaddr = Addr(sext<SV39_VADDR_BITS>(vaddr));
             Addr paddr = walker->tlb->hiddenTranslateWithTLB(vaddr, satp.asid,
                                                              satp.mode, mode);
-
             req->setPaddr(paddr);
+
+            // DETMEM: Check whether this is a deterministic-memory page
+            // in the TLB.
+            TlbEntry *entry = walker->tlb->lookup(getVPNFromVAddr(vaddr,
+                satp.mode), satp.asid, mode, true);
+            if (entry && entry->deterministic) {
+                // Set deterministic flag in the final translated request
+                req->setFlags(req->getFlags() | Request::DETERMINISTIC);
+                DPRINTF(DetPTW, "**Translation complete: Setting "
+                                "DETERMINISTIC "
+                                "flag on request to addr %#x\n", vaddr);
+            }
 
             // do pmp check if any checking condition is met.
             // timingFault will be NoFault if pmp checks are

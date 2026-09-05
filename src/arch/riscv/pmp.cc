@@ -28,6 +28,9 @@
  */
 
 #include "arch/riscv/pmp.hh"
+
+#include <algorithm>
+
 #include "arch/generic/tlb.hh"
 #include "arch/riscv/faults.hh"
 #include "arch/riscv/isa.hh"
@@ -53,6 +56,44 @@ PMP::PMP(const Params &params) :
     numRules(0)
 {
     pmpTable.resize(pmpEntries);
+}
+
+void
+PMP::serialize(CheckpointOut &cp) const
+{
+    std::vector<Addr> raw_addr(pmpTable.size());
+    std::vector<uint32_t> cfg(pmpTable.size());
+
+    for (size_t i = 0; i < pmpTable.size(); i++) {
+        raw_addr[i] = pmpTable[i].rawAddr;
+        cfg[i] = pmpTable[i].pmpCfg;
+    }
+
+    SERIALIZE_CONTAINER(raw_addr);
+    SERIALIZE_CONTAINER(cfg);
+}
+
+void
+PMP::unserialize(CheckpointIn &cp)
+{
+    std::vector<Addr> raw_addr;
+    std::vector<uint32_t> cfg;
+
+    UNSERIALIZE_CONTAINER(raw_addr);
+    UNSERIALIZE_CONTAINER(cfg);
+
+    const size_t n = std::min(pmpTable.size(),
+                              std::min(raw_addr.size(), cfg.size()));
+    for (size_t i = 0; i < n; i++) {
+        pmpTable[i].rawAddr = raw_addr[i];
+        pmpTable[i].pmpCfg = (uint8_t)cfg[i];
+    }
+
+    // pmpAddr and numRules are derived state; rebuild both from the raw
+    // registers we just restored.
+    for (uint32_t i = 0; i < pmpEntries; i++) {
+        pmpUpdateRule(i);
+    }
 }
 
 Fault

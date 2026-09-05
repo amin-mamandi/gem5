@@ -41,8 +41,11 @@
 
 #include "base/logging.hh"
 #include "base/trace.hh"
-#include "params/WayPartitioningPolicy.hh"
 #include "mem/cache/tags/partitioning_policies/way_allocation.hh"
+
+// DETMEM
+#include "params/WayPartitioningPolicy.hh"
+#include "sim/system.hh"
 
 namespace gem5
 {
@@ -51,10 +54,16 @@ namespace partitioning_policy
 {
 
 WayPartitioningPolicy::WayPartitioningPolicy
-    (const WayPartitioningPolicyParams &params): BasePartitioningPolicy(params)
+    // DETMEM
+    (const WayPartitioningPolicyParams &params):
+        BasePartitioningPolicy(params),
+        cache(nullptr),
+        assoc(params.cache_associativity)
+
 {
     // get cache associativity and check it is usable for this policy
-    const auto cache_assoc = params.cache_associativity;
+    // DETMEM
+    const auto cache_assoc = assoc;
     assert(cache_assoc > 0);
 
     // iterate over all provided allocations
@@ -80,7 +89,8 @@ WayPartitioningPolicy::WayPartitioningPolicy
         }
 
         // report allocation of policies
-        DPRINTF(PartitionPolicy, "Allocated %d ways in WayPartitioningPolicy "
+        // DETMEM
+        DPRINTF(DetPart, "Allocated %d ways in WayPartitioningPolicy "
             "for PartitionID: %d \n", allocation->getWays().size(),
             alloc_id);
     }
@@ -98,11 +108,95 @@ WayPartitioningPolicy::removeWayToPartition(uint64_t partition_id, unsigned way)
     partitionIdWays[partition_id].erase(way);
 }
 
+void WayPartitioningPolicy::setupNoPartitioning() {
+    // DETMEM: Set up only when currently in partitioned mode.
+    if (partitioningEnabled) {  // Only setup if currently partitioned
+        // Clear existing allocations
+        partitionIdWays.clear();
+
+        // Assign all ways to every partition ID.
+        for (unsigned partition_id = 0; partition_id < numPartitions;
+             partition_id++) {
+            for (unsigned way = 0; way < assoc; way++) {
+                addWayToPartition(partition_id, way);
+            }
+        }
+
+        partitioningEnabled = false;
+        dmAssoc = false;  // No deterministic filtering for mode 0
+        DPRINTF(DetPart, "Mode 0: All partitions assigned all %d ways\n",
+            assoc);
+    }
+}
+
+void WayPartitioningPolicy::setupPartitioning() {
+    // Always setup when called, or check if already partitioned
+    if (!partitioningEnabled) {  // Only setup if currently not partitioned
+        // Clear existing allocations
+        partitionIdWays.clear();
+
+        // Even split of the ways across the partitions.  Refuse a split that
+        // would leave a partition with no ways at all: a partition that can
+        // allocate nowhere makes the cache unusable for that core.
+        fatal_if(assoc < numPartitions,
+                 "%s: cache associativity %u cannot be split across %u "
+                 "partitions; each partition needs at least one way.",
+                 name(), assoc, numPartitions);
+
+        const unsigned ways_per_partition = assoc / numPartitions;
+        warn_if(assoc % numPartitions != 0,
+                "%s: associativity %u is not a multiple of %u partitions; "
+                "%u way(s) will be left unassigned.",
+                name(), assoc, numPartitions, assoc % numPartitions);
+
+        for (unsigned partition_id = 0; partition_id < numPartitions;
+             ++partition_id) {
+            for (unsigned way = partition_id * ways_per_partition;
+                        way < (partition_id + 1) * ways_per_partition;
+                        ++way) {
+                addWayToPartition(partition_id, way);
+            }
+        }
+
+        partitioningEnabled = true;
+        // Initialize to false; set per request in mode 2.
+        dmAssoc = false;
+        DPRINTF(DetPart,
+            "Mode 1/2: Default partitioning - %d ways per partition\n",
+            ways_per_partition);
+    }
+}
+
+void WayPartitioningPolicy::clearDM(uint64_t partition_id) {
+    if (!cache) {
+        warn("WayPartitioningPolicy::clearDM called with null cache pointer\n"
+            );
+        return;
+    }
+
+    auto it = partitionIdWays.find(partition_id);
+    if (it == partitionIdWays.end() || it->second.empty()) {
+        DPRINTF(DetPart, "No ways assigned to partition %llu for DM "
+                "clearing\n", partition_id);
+        return;
+    }
+
+    const int minWay = *std::min_element(it->second.begin(), it->second.end());
+    const int maxWay = *std::max_element(it->second.begin(), it->second.end());
+
+    DPRINTF(DetPart, "Clearing DM bits for partition %llu in assigned "
+                     "ways [%d - %d]\n", partition_id, minWay, maxWay);
+
+    cache->clearDeterministicBits(minWay, maxWay);
+}
+
 void
 WayPartitioningPolicy::filterByPartition(
     std::vector<ReplaceableEntry *> &entries,
     const uint64_t partition_id) const
 {
+    // DETMEM
+    /*
     if (// No entries to filter
         entries.empty() ||
         // This partition_id is not policed
@@ -121,6 +215,48 @@ WayPartitioningPolicy::filterByPartition(
         );
 
         entries.erase(entries_to_remove, entries.end());
+    }
+    */
+   // DETMEM: Return if this partition has no entries or assigned ways.
+    if (entries.empty() || partitionIdWays.find(partition_id) ==
+        partitionIdWays.end()) {
+        DPRINTF(DetPart, "No entries or no ways defined for partition %d\n",
+            partition_id);
+        return;
+    }
+
+    // DPRINTF(DetPart, "Before way filtering: %d entries for partition %d\n",
+    // entries.size(), partition_id);
+
+    // Filter by way allocation
+    const auto entries_to_remove = std::remove_if(
+        entries.begin(),
+        entries.end(),
+        [this, partition_id](ReplaceableEntry *entry) {
+            return partitionIdWays.at(partition_id).find(entry->getWay())
+                == partitionIdWays.at(partition_id).end();
+        }
+    );
+    entries.erase(entries_to_remove, entries.end());
+
+        // DPRINTF(DetPart, "After way filtering: %d entries remain for
+        // partition %d\n", entries.size(), partition_id);
+
+
+    // For mode 2 with dmAssoc, prioritize non-deterministic blocks
+    if (dmAssoc && !entries.empty()) {
+        bool hasNonDeterministic = std::any_of(entries.begin(), entries.end(),
+            [](ReplaceableEntry *entry) { return !entry->isDeterministic(); });
+        if (hasNonDeterministic) {
+            const auto det_entries_to_remove = std::remove_if(
+                entries.begin(),
+                entries.end(),
+                [](ReplaceableEntry *entry) {
+                    return entry->isDeterministic();
+                }
+            );
+            entries.erase(det_entries_to_remove, entries.end());
+        }
     }
 }
 

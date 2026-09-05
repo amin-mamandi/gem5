@@ -56,6 +56,8 @@ Source('write_queue.cc')
 Source('write_queue_entry.cc')
 
 DebugFlag('Cache')
+# DETMEM
+DebugFlag('DetCache')
 DebugFlag('CacheComp')
 DebugFlag('CachePort')
 DebugFlag('CacheRepl')
@@ -63,6 +65,8 @@ DebugFlag('CacheTags')
 DebugFlag('CacheVerbose')
 DebugFlag('HWPrefetch')
 DebugFlag('MSHR')
+# DETMEM
+DebugFlag('DetMSHR')
 DebugFlag('HWPrefetchQueue')
 DebugFlag('PartitionPolicy')
 

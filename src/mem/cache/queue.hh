@@ -45,6 +45,7 @@
 #ifndef __MEM_CACHE_QUEUE_HH__
 #define __MEM_CACHE_QUEUE_HH__
 
+#include <algorithm>
 #include <cassert>
 #include <string>
 #include <type_traits>
@@ -58,6 +59,10 @@
 #include "mem/packet.hh"
 #include "sim/cur_tick.hh"
 #include "sim/drain.hh"
+
+// DETMEM
+#include "debug/DetMSHR.hh"
+#include "sim/system.hh"
 
 namespace gem5
 {
@@ -101,6 +106,11 @@ class Queue : public Drainable, public Named
     /** Holds non allocated entries. */
     typename Entry::List freeList;
 
+    /** MemGuard hooks; system is null for queues that are not regulated. */
+    System *system;
+    bool is_dcache;
+    uint8_t cpu_id;
+
     typename Entry::Iterator addToReadyList(Entry* entry)
     {
         if (readyList.empty() ||
@@ -135,6 +145,28 @@ class Queue : public Drainable, public Named
         Named(name),
         label(_label), numEntries(num_entries + reserve),
         numReserve(reserve), entries(numEntries, name + ".entry"),
+        // DETMEM
+        system(nullptr), is_dcache(false), cpu_id(0),
+        _numInService(0), allocated(0)
+    {
+        for (int i = 0; i < numEntries; ++i) {
+            freeList.push_back(&entries[i]);
+        }
+    }
+
+    /**
+     * Create a queue with a given number of entries.
+     *
+     * @param num_entries The number of entries in this queue.
+     * @param reserve The extra overflow entries needed.
+     */
+    Queue(const std::string &_label, int num_entries, int reserve,
+            const std::string &name, System *sys,
+            bool dcache_flag, uint8_t core_id) :
+        Named(name),
+        label(_label), numEntries(num_entries + reserve),
+        numReserve(reserve), entries(numEntries, name + ".entry"),
+        system(sys), is_dcache(dcache_flag), cpu_id(core_id),
         _numInService(0), allocated(0)
     {
         for (int i = 0; i < numEntries; ++i) {
@@ -149,7 +181,22 @@ class Queue : public Drainable, public Named
 
     bool isFull() const
     {
-        return (allocated >= numEntries - numReserve);
+        // Physical limit: entries the queue may hand out before the reserve.
+        int limit = numEntries - numReserve;
+
+        // MemGuard may lower that limit for this core.  A negative regulated
+        // count means "unregulated"; the limit is only ever tightened, never
+        // raised above the number of entries that actually exist, so the
+        // caller can never outrun freeList.
+        if (is_dcache && system != nullptr &&
+            system->isMemGuardEnabledForCore(cpu_id)) {
+            const int regulated = system->getmshrCount(cpu_id);
+            if (regulated >= 0) {
+                limit = std::min(limit, regulated);
+            }
+        }
+
+        return allocated >= limit;
     }
 
     int numInService() const

@@ -27,13 +27,16 @@
 
 from typing import Optional
 
-from m5.objects import (
+from m5.objects import (  # DETMEM
     BadAddr,
     BaseCPU,
     BaseXBar,
     Cache,
     L2XBar,
+    PartitionManager,
     SystemXBar,
+    WayPartitioningPolicy,
+    WayPolicyAllocation,
 )
 from m5.params import Port
 
@@ -82,14 +85,18 @@ class PrivateL1SharedL2CacheHierarchy(
         l1i_assoc: int = 8,
         l2_assoc: int = 16,
         membus: Optional[BaseXBar] = None,
+        prefetcher_cls="default",
     ) -> None:
+        # DETMEM
         """
-        :param l1d_size: The size of the L1 Data Cache (e.g., "32KiB").
-        :param  l1i_size: The size of the L1 Instruction Cache (e.g., "32KiB").
-        :param l2_size: The size of the L2 Cache (e.g., "256KiB").
+        :param l1d_size: The size of the L1 Data Cache (e.g., "32kB").
+        :param  l1i_size: The size of the L1 Instruction Cache (e.g., "32kB").
+        :param l2_size: The size of the L2 Cache (e.g., "256kB").
         :param l1d_assoc: The associativity of the L1 Data Cache.
         :param l1i_assoc: The associativity of the L1 Instruction Cache.
         :param l2_assoc: The associativity of the L2 Cache.
+        :param prefetcher_cls: Prefetcher class for every cache, or None to
+                               disable prefetching entirely.
         :param membus: The memory bus. This parameter is optional parameter and
                        will default to a 64 bit width SystemXBar is not
                        specified.
@@ -106,6 +113,7 @@ class PrivateL1SharedL2CacheHierarchy(
             l2_assoc=l2_assoc,
         )
 
+        self._prefetcher_cls = prefetcher_cls
         self.membus = membus if membus else self._get_default_membus()
 
     @overrides(AbstractClassicCacheHierarchy)
@@ -116,12 +124,23 @@ class PrivateL1SharedL2CacheHierarchy(
     def get_cpu_side_port(self) -> Port:
         return self.membus.cpu_side_ports
 
+    def _pf_kwargs(self):
+        """Prefetcher argument for the cache constructors.
+
+        "default" leaves each cache's own default in place; anything else
+        (including None, which disables prefetching) is passed through.
+        """
+        if self._prefetcher_cls == "default":
+            return {}
+        return {"PrefetcherCls": self._prefetcher_cls}
+
     @overrides(AbstractCacheHierarchy)
     def incorporate_cache(self, board: AbstractBoard) -> None:
         # Set up the system port for functional access from the simulator.
         board.connect_system_port(self.membus.cpu_side_ports)
 
-        for _, port in board.get_mem_ports():
+        # DETMEM
+        for _, port in board.get_memory().get_mem_ports():
             self.membus.mem_side_ports = port
 
         self.l1icaches = [
@@ -129,15 +148,48 @@ class PrivateL1SharedL2CacheHierarchy(
                 size=self._l1i_size,
                 assoc=self._l1i_assoc,
                 writeback_clean=False,
+                # DETMEM
+                cpu_id=i,
+                **self._pf_kwargs(),
             )
             for i in range(board.get_processor().get_num_cores())
         ]
         self.l1dcaches = [
-            L1DCache(size=self._l1d_size, assoc=self._l1d_assoc)
+            L1DCache(
+                size=self._l1d_size,
+                assoc=self._l1d_assoc,
+                cpu_id=i,
+                **self._pf_kwargs(),
+            )
             for i in range(board.get_processor().get_num_cores())
         ]
         self.l2bus = L2XBar()
-        self.l2cache = L2Cache(size=self._l2_size, assoc=self._l2_assoc)
+        # DETMEM: Define way partitioning allocations
+        num_cores = board.get_processor().get_num_cores()
+        ways_per_core = self._l2_assoc // num_cores
+        allocations = [
+            WayPolicyAllocation(
+                partition_id=i,
+                ways=list(range(i * ways_per_core, (i + 1) * ways_per_core)),
+            )
+            for i in range(num_cores)
+        ]
+
+        # Create partitioning policy
+        policy = WayPartitioningPolicy(
+            cache_associativity=self._l2_assoc, allocations=allocations
+        )
+
+        # Create partition manager
+        partition_manager = PartitionManager(partitioning_policies=[policy])
+
+        self.l2cache = L2Cache(
+            size=self._l2_size,
+            assoc=self._l2_assoc,
+            partitioning_manager=partition_manager,
+            is_LLC=True,
+            **self._pf_kwargs(),
+        )
 
         if board.has_coherent_io():
             self._setup_io_cache(board)
@@ -185,7 +237,8 @@ class PrivateL1SharedL2CacheHierarchy(
             data_latency=50,
             response_latency=50,
             mshrs=20,
-            size="1KiB",
+            # DETMEM
+            size="1kB",
             tgts_per_mshr=12,
             addr_ranges=board.mem_ranges,
         )

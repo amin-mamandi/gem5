@@ -353,6 +353,106 @@ dumpresetstats(ThreadContext *tc, Tick delay, Tick period)
     statistics::schedStatEvent(true, true, when, repeat);
 }
 
+/**
+ * cpu_id comes straight from guest code, so it has to be range-checked before
+ * it is used to index any per-core state.
+ */
+static bool
+validGuestCpuId(ThreadContext *tc, uint64_t cpu_id, const char *what)
+{
+    const uint64_t n = tc->getSystemPtr()->threads.size();
+    if (cpu_id >= n) {
+        warn("pseudo_inst::%s: cpu_id %llu is out of range (%llu context(s)); "
+             "ignoring.\n", what, (unsigned long long)cpu_id,
+             (unsigned long long)n);
+        return false;
+    }
+    return true;
+}
+
+void
+setmshr(ThreadContext *tc, uint64_t cpu_id, uint64_t mshr_value)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::setmshr(%llu, %llu)\n",
+            (unsigned long long)cpu_id, (unsigned long long)mshr_value);
+    if (!validGuestCpuId(tc, cpu_id, "setmshr"))
+        return;
+    System *sys = tc->getSystemPtr();
+    sys->setMshr(cpu_id, (int)mshr_value);
+}
+
+void
+enablewaypart(ThreadContext *tc, uint64_t use)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::enablewaypart(%i)\n", use);
+    System *sys = tc->getSystemPtr();
+    sys->setWayPartMode(use);
+}
+
+void
+setmembudget(ThreadContext *tc, uint64_t cpu_id, uint64_t mem_budget)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::setmembudget(%llu, %llu MB/s)\n",
+            (unsigned long long)cpu_id, (unsigned long long)mem_budget);
+    if (!validGuestCpuId(tc, cpu_id, "setmembudget"))
+        return;
+    System *sys = tc->getSystemPtr();
+    sys->setMemBudget(cpu_id, mem_budget);
+}
+
+void
+enablememguard(ThreadContext *tc, uint64_t enable_value)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::enablememguard(%i)\n", enable_value);
+    System *sys = tc->getSystemPtr();
+    sys->enableMemGuard(enable_value);
+}
+
+void
+cleardm(ThreadContext *tc, uint64_t cpu_id)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::cleardm(%llu)\n",
+            (unsigned long long)cpu_id);
+    if (!validGuestCpuId(tc, cpu_id, "cleardm"))
+        return;
+    System *sys = tc->getSystemPtr();
+    sys->clearDM(cpu_id);
+}
+
+void
+m5exitinst(ThreadContext *tc, uint64_t n_inst)
+{
+    // Exposed in the m5ops ABI but never implemented; warn rather than
+    // killing the simulation if guest code reaches it.
+    warn_once("pseudo_inst::m5exitinst(%llu) is not implemented; ignoring.\n",
+              (unsigned long long)n_inst);
+}
+
+/**
+ * Enable deterministic-memory prioritisation in the memory controller.
+ *
+ * Requests are identified by the DETERMINISTIC flag the page table walker
+ * sets, so no particular bank placement is required.  The argument is kept
+ * for compatibility and still fills in the reserved-bank mask used by the
+ * bank-partitioning experiments: non-zero enables prioritisation.
+ */
+void
+medusa(ThreadContext *tc, uint64_t num_banks)
+{
+    DPRINTF(PseudoInst, "pseudo_inst::medusa(%llu)\n",
+            (unsigned long long)num_banks);
+    if (num_banks > 64) {
+        warn("pseudo_inst::medusa: %llu banks requested, clamping to 64.\n",
+             (unsigned long long)num_banks);
+        num_banks = 64;
+    }
+    System *sys = tc->getSystemPtr();
+    sys->medusaReservedBankMask = (num_banks >= 64)
+        ? ~uint64_t(0)
+        : ((uint64_t(1) << num_banks) - 1);
+    sys->dmPrioritize = (num_banks > 0);
+}
+
 void
 m5checkpoint(ThreadContext *tc, Tick delay, Tick period)
 {

@@ -61,6 +61,8 @@
 #include "mem/cache/tags/partitioning_policies/partition_manager.hh"
 #include "mem/packet.hh"
 #include "params/BaseSetAssoc.hh"
+// DETMEM
+#include "sim/system.hh"
 
 namespace gem5
 {
@@ -207,6 +209,12 @@ class BaseSetAssoc : public BaseTags
         if (partitionManager) {
             auto partition_id = partitionManager->readPacketPartitionID(pkt);
             partitionManager->notifyAcquire(partition_id);
+        }
+
+        // DETMEM
+        if (blk->isDeterministic() && system->getWayPartMode() == 2) {
+            RequestorID requestor_id = pkt->req->requestorId();
+            stats.determ_blks[requestor_id]++;
         }
 
         // Update replacement policy

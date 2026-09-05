@@ -45,6 +45,8 @@ SimObject('BaseTimingSimpleCPU.py', sim_objects=['BaseTimingSimpleCPU'])
 Source('timing.cc')
 
 DebugFlag('SimpleCPU')
+# DETMEM
+DebugFlag('MemGuard')
 
 Source('base.cc')
 SimObject('BaseSimpleCPU.py', sim_objects=['BaseSimpleCPU'])

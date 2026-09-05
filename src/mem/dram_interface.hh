@@ -49,6 +49,9 @@
 #include "mem/drampower.hh"
 #include "mem/mem_interface.hh"
 #include "params/DRAMInterface.hh"
+// DETMEM
+#include "debug/DetMem.hh"
+#include "sim/system.hh"
 
 namespace gem5
 {
@@ -663,6 +666,20 @@ class DRAMInterface : public MemInterface
     }
 
   public:
+
+    // DETMEM
+    /**
+     * Deterministic-memory bank reservation state.
+     *
+     * Per-instance rather than function-local statics: a system with more
+     * than one DRAM interface would otherwise share one round-robin cursor
+     * and one fairness counter across all channels.  Mutable because
+     * chooseNextFRFCFS() is const.
+     */
+    uint64_t dm_req_srv_thresh = 300;
+    mutable uint64_t dm_req_srv_count = 0;
+    mutable uint64_t bankmaskSaved = 0;
+
     /**
      * Initialize the DRAM interface and verify parameters
      */

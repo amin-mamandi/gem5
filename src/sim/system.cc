@@ -58,6 +58,7 @@
 #include "mem/physical.hh"
 #include "params/System.hh"
 #include "sim/byteswap.hh"
+#include "sim/core.hh"
 #include "sim/debug.hh"
 #include "sim/redirect_path.hh"
 #include "sim/serialize_handlers.hh"
@@ -180,6 +181,16 @@ System::System(const Params &p)
       _cacheLineSize(p.cache_line_size),
       numWorkIds(p.num_work_ids),
       thermalModel(p.thermal_model),
+      // DETMEM
+      // Declared between thermalModel and _m5opRange; initialised in the same
+      // order to keep -Wreorder quiet.
+      wayPartMode(1),
+      budgetPeriodTicks(500000000),
+      use_memguard(0),
+      clearDmFlag(false),
+      clearDmCpuId(0),
+      medusaReservedBankMask(0),
+      dmPrioritize(false),
       _m5opRange(p.m5ops_base ?
                  RangeSize(p.m5ops_base, 0x10000) :
                  AddrRange(1, 0)), // Create an empty range if disabled
@@ -233,6 +244,126 @@ System::setMemoryMode(enums::MemoryMode mode)
 {
     assert(drainState() == DrainState::Drained);
     memoryMode = mode;
+}
+
+// DETMEM
+void
+System::setMshr(unsigned cpu_id, int mshrcount)
+{
+    ensureCpuState(cpu_id);
+
+    // Raising (or removing) the limit can let a cache that blocked itself on
+    // Blocked_NoMSHRs make progress again, so ask the core to unblock it.
+    if (mshrcount < 0 || mshrcount > mshrCount[cpu_id]) {
+        DPRINTF(MSHRInst, "Setting pending unblock for CPU %u\n", cpu_id);
+        pendingUnblock[cpu_id] = true;
+    }
+    mshrCount[cpu_id] = mshrcount;
+}
+
+void
+System::enableMemGuardForCore(unsigned cpu_id, bool enable)
+{
+    ensureCpuState(cpu_id);
+    memguardEnabled[cpu_id] = enable;
+    DPRINTF(MSHRInst, "MemGuard %s for CPU %u\n",
+            enable ? "enabled" : "disabled", cpu_id);
+}
+
+bool
+System::isMemGuardEnabledForCore(unsigned cpu_id) const
+{
+    return (cpu_id < memguardEnabled.size()) ? memguardEnabled[cpu_id] : false;
+}
+
+int
+System::getmshrCount(unsigned cpu_id) const
+{
+    return (cpu_id < mshrCount.size()) ? mshrCount[cpu_id] : -1;
+}
+
+int64_t
+System::bandwidthToBudget(uint64_t mb_per_sec) const
+{
+    // accesses per period = MB/s * 1e6 B/MB * period_seconds /
+    // bytes_per_access
+    const double period_s =
+        (double)budgetPeriodTicks / (double)sim_clock::Frequency;
+    const double accesses =
+        (double)mb_per_sec * 1e6 * period_s / (double)memGuardBurstBytes;
+    return (int64_t)(accesses + 0.5);
+}
+
+void
+System::setMemBudget(unsigned cpu_id, uint64_t mb_per_sec)
+{
+    ensureCpuState(cpu_id);
+    const int64_t budget = bandwidthToBudget(mb_per_sec);
+    DPRINTF(MSHRInst, "Set memory budget for CPU %u to %llu MB/s "
+            "(%lld accesses per %lld ticks)\n", cpu_id,
+            (unsigned long long)mb_per_sec, (long long)budget,
+            (long long)budgetPeriodTicks);
+    budgetMBPerSec[cpu_id] = mb_per_sec;
+    memoryBudget[cpu_id] = budget;
+    budgetInit[cpu_id] = budget;
+}
+
+void
+System::resetMemBudget(unsigned cpu_id)
+{
+    ensureCpuState(cpu_id);
+    DPRINTF(MSHRInst, "resetMemBudget: CPU %u before: budget=%lld "
+            "mshrCount=%d\n", cpu_id, (long long)memoryBudget[cpu_id],
+            mshrCount[cpu_id]);
+
+    // Restore the budget and lift the throttle for the new period.
+    memoryBudget[cpu_id] = budgetInit[cpu_id];
+    setMshr(cpu_id, -1);
+
+    DPRINTF(MSHRInst, "resetMemBudget: CPU %u after: budget=%lld "
+            "mshrCount=%d\n", cpu_id, (long long)memoryBudget[cpu_id],
+            mshrCount[cpu_id]);
+}
+
+void
+System::enableMemGuard(int use)
+{
+    // Enable or disable regulation on every core, not just core 0.
+    const size_t n = std::max<size_t>(memguardEnabled.size(), threads.size());
+    if (n > 0) {
+        ensureCpuState(n - 1);
+    }
+    for (size_t i = 0; i < memguardEnabled.size(); ++i) {
+        memguardEnabled[i] = (use > 0);
+    }
+    DPRINTF(MSHRInst, "enableMemGuard: MemGuard %s for %u CPU(s)\n",
+            (use > 0) ? "enabled" : "disabled",
+            (unsigned)memguardEnabled.size());
+    use_memguard = use;
+}
+
+void
+System::setWayPartMode(int use)
+{
+    /**
+     * 0: partitioning disabled
+     * 1: simple Way-based partitioning
+     * 2: deterministic memory replacement policy
+     */
+    wayPartMode = use;
+}
+
+int
+System::getWayPartMode()
+{
+    return wayPartMode;
+}
+
+void
+System::clearDM(int cpu_id)
+{
+    clearDmFlag = true;
+    clearDmCpuId = cpu_id;
 }
 
 void

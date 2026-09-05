@@ -43,6 +43,7 @@
 
 #include "cpu/base.hh"
 
+#include <algorithm>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -57,6 +58,7 @@
 #include "base/trace.hh"
 #include "cpu/checker/cpu.hh"
 #include "cpu/thread_context.hh"
+#include "debug/MemGuard.hh"
 #include "debug/Mwait.hh"
 #include "debug/SyscallVerbose.hh"
 #include "debug/Thread.hh"
@@ -142,7 +144,8 @@ BaseCPU::BaseCPU(const Params &p, bool is_checker)
       syscallRetryLatency(p.syscallRetryLatency),
       pwrGatingLatency(p.pwr_gating_latency),
       powerGatingOnIdle(p.power_gating_on_idle),
-      enterPwrGatingEvent([this]{ enterPwrGating(); }, name())
+      enterPwrGatingEvent([this]{ enterPwrGating(); }, name()),
+      memGuardEvent([this]{ memGuardTick(); }, name())
 {
     // if Python did not provide a valid ID, do it here
     if (_cpuId == -1 ) {
@@ -368,6 +371,12 @@ BaseCPU::init()
 void
 BaseCPU::startup()
 {
+    // Drive MemGuard from its own periodic event; see memGuardTick().
+    if (!memGuardEvent.scheduled()) {
+        schedule(memGuardEvent,
+                 curTick() + std::max<Tick>(system->budgetPeriodTicks, 1));
+    }
+
     if (params().progress_interval) {
         new CPUProgressEvent(this, params().progress_interval);
     }
@@ -388,6 +397,49 @@ BaseCPU::pmuProbePoint(const char *name)
     ptr.reset(new probing::PMU(getProbeManager(), name));
 
     return ptr;
+}
+
+void
+BaseCPU::memGuardTick()
+{
+    if (updateMemGuard() && unblockDataCache()) {
+        DPRINTF(MemGuard, "CPU %u: unblocked data cache\n", cpuId());
+    }
+
+    schedule(memGuardEvent,
+             curTick() + std::max<Tick>(system->budgetPeriodTicks, 1));
+}
+
+bool
+BaseCPU::updateMemGuard()
+{
+    const unsigned cid = cpuId();
+    bool unblock = false;
+
+    if (system->use_memguard && system->isMemGuardEnabledForCore(cid)) {
+        system->ensureCpuState(cid);
+        if (system->budgetInit[cid]) {
+            const Tick now = curTick();
+            if (!system->cycleInit[cid]) {
+                system->cycleInit[cid] = now;
+            } else if ((Tick)(now - system->cycleInit[cid]) >=
+                       system->budgetPeriodTicks) {
+                const Tick elapsed = now - system->cycleInit[cid];
+                DPRINTF(MemGuard, "CPU %u: period elapsed (%llu ticks)\n",
+                        cid, (unsigned long long)elapsed);
+                system->resetMemBudget(cid);
+                system->cycleInit[cid] = now;
+                unblock = true;
+            }
+        }
+    }
+
+    if (cid < system->pendingUnblock.size() && system->pendingUnblock[cid]) {
+        system->pendingUnblock[cid] = false;
+        unblock = true;
+    }
+
+    return unblock;
 }
 
 void

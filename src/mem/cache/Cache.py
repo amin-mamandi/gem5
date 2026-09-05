@@ -324,6 +324,15 @@ class BaseCache(ClockedObject):
     cpu_side = ResponsePort("Upstream port closer to the CPU and/or device")
     mem_side = RequestPort("Downstream port closer to memory")
 
+    # DETMEM
+    is_LLC = Param.Bool(False, "Is this cache an LLC")
+
+    is_iCache = Param.Bool(False, "Is this cache an instruction cache")
+
+    is_dCache = Param.Bool(False, "Is this cache a data cache")
+
+    cpu_id = Param.Int(0, "CPU ID for this cache")
+
     addr_ranges = VectorParam.AddrRange(
         [AllMemory], "Address range for the CPU-side port (to allow striping)"
     )

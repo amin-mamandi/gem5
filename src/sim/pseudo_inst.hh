@@ -114,6 +114,14 @@ void m5Syscall(ThreadContext *tc);
 void togglesync(ThreadContext *tc);
 void triggerWorkloadEvent(ThreadContext *tc);
 void m5Hypercall(ThreadContext *tc, uint64_t hypercall_id);
+// DETMEM
+void setmshr(ThreadContext *tc, uint64_t cpu_id, uint64_t mshr_value);
+void setmembudget(ThreadContext *tc, uint64_t cpu_id, uint64_t mem_budget);
+void enablememguard(ThreadContext *tc, uint64_t enable_value);
+void cleardm(ThreadContext *tc, uint64_t clear_value);
+void m5exitinst(ThreadContext *tc, uint64_t n_inst);
+void medusa(ThreadContext *tc, uint64_t use);
+void enablewaypart(ThreadContext *tc, uint64_t use);
 
 /**
  * Execute a decoded M5 pseudo instruction
@@ -198,6 +206,29 @@ pseudoInstWork(ThreadContext *tc, uint8_t func, uint64_t &result)
         invokeSimcall<ABI>(tc, dumpresetstats);
         return true;
 
+      // DETMEM
+      case M5OP_SETMSHR:
+        invokeSimcall<ABI>(tc, setmshr);
+        return true;
+      case M5OP_SETMEMBUDGET:
+        invokeSimcall<ABI>(tc, setmembudget);
+        return true;
+      case M5OP_ENABLEMEMGUARD:
+        invokeSimcall<ABI>(tc, enablememguard);
+        return true;
+      case M5OP_CLEARDM:
+        invokeSimcall<ABI>(tc, cleardm);
+        return true;
+      case M5OP_EXIT_INST:
+        invokeSimcall<ABI>(tc, m5exitinst);
+        return true;
+      case M5OP_MEDUSA:
+        invokeSimcall<ABI>(tc, medusa);
+        return true;
+      case M5OP_ENABLEWAYPART:
+        invokeSimcall<ABI>(tc, enablewaypart);
+        return true;
+
       case M5OP_CHECKPOINT:
         invokeSimcall<ABI>(tc, m5checkpoint);
         return true;
@@ -233,13 +264,8 @@ pseudoInstWork(ThreadContext *tc, uint8_t func, uint64_t &result)
         invokeSimcall<ABI>(tc, workend);
         return true;
 
+      // DETMEM
       case M5OP_RESERVED1:
-      case M5OP_RESERVED2:
-      case M5OP_RESERVED3:
-      case M5OP_RESERVED4:
-      case M5OP_RESERVED5:
-        warn("Unimplemented m5 op (%#x)\n", func);
-        return false;
 
       /* dist-gem5 functions */
       case M5OP_DIST_TOGGLE_SYNC:

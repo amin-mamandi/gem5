@@ -63,6 +63,8 @@
 #include "mem/cache/write_queue_entry.hh"
 #include "mem/request.hh"
 #include "params/Cache.hh"
+// DETMEM
+#include "debug/DetCache.hh"
 
 namespace gem5
 {
@@ -160,7 +162,8 @@ Cache::satisfyRequest(PacketPtr pkt, CacheBlk *blk,
 
 bool
 Cache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
-              PacketList &writebacks)
+              // DETMEM
+              PacketList &writebacks, bool isdeterministic)
 {
 
     if (pkt->req->isUncacheable()) {
@@ -184,7 +187,8 @@ Cache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
         return false;
     }
 
-    return BaseCache::access(pkt, blk, lat, writebacks);
+    // DETMEM
+    return BaseCache::access(pkt, blk, lat, writebacks, isdeterministic);
 }
 
 void
@@ -263,6 +267,13 @@ Cache::doWritebacksAtomic(PacketList& writebacks)
     }
 }
 
+bool
+Cache::unblockCache()
+{
+    // DETMEM: We are a coherent cache and therefore we do not have
+    // anything to unblock.
+    return false;
+}
 
 void
 Cache::recvTimingSnoopResp(PacketPtr pkt)

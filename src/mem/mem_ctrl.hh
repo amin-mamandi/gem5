@@ -59,6 +59,8 @@
 #include "mem/qport.hh"
 #include "params/MemCtrl.hh"
 #include "sim/eventq.hh"
+// DETMEM
+#include "debug/DetMem.hh"
 
 namespace gem5
 {
@@ -156,6 +158,9 @@ class MemPacket
      */
     uint8_t _qosValue;
 
+    // DETMEM
+    const bool isDeterministic;
+
     /**
      * Set the packet QoS value
      * (interface compatibility with Packet)
@@ -205,12 +210,15 @@ class MemPacket
 
     MemPacket(PacketPtr _pkt, bool is_read, bool is_dram, uint8_t _channel,
                uint8_t _rank, uint8_t _bank, uint32_t _row, uint16_t bank_id,
-               Addr _addr, unsigned int _size)
+               // DETMEM
+               Addr _addr, unsigned int _size, bool is_deterministic = false)
         : entryTime(curTick()), readyTime(curTick()), pkt(_pkt),
           _requestorId(pkt->requestorId()),
           read(is_read), dram(is_dram), pseudoChannel(_channel), rank(_rank),
           bank(_bank), row(_row), bankId(bank_id), addr(_addr), size(_size),
-          burstHelper(NULL), _qosValue(_pkt->qosValue())
+          // DETMEM
+          burstHelper(NULL), _qosValue(_pkt->qosValue()),
+              isDeterministic(is_deterministic)
     { }
 
 };
@@ -320,6 +328,16 @@ class MemCtrl : public qos::MemCtrl
      */
     bool readQueueFull(unsigned int pkt_count) const;
 
+    // DETMEM
+    /**
+     * Does any queued request target a bank reserved for deterministic
+     * memory?  Memoised per tick: the scan is O(queue) and this is consulted
+     * from the scheduling decision, which can run several times per tick.
+     */
+    bool isRequestToReservedBank(const std::vector<MemPacketQueue>& queues);
+    Tick reservedBankScanTick = MaxTick;
+    bool reservedBankScanResult = false;
+
     /**
      * Check if the write queue has room for more entries
      *
@@ -345,6 +363,30 @@ class MemCtrl : public qos::MemCtrl
      */
     bool addToReadQueue(PacketPtr pkt, unsigned int pkt_count,
                         MemInterface* mem_intr);
+
+    // DETMEM
+    /**
+     * Map a requestor to the core that issued the request.
+     *
+     * The core must come from the requestor, not from the bank the address
+     * happens to map to: with any page sharing at all, and for every request
+     * a core makes to a bank it does not "own", bank number is not a proxy
+     * for which core generated the traffic.  Requestor names are parsed once
+     * and cached, so this stays off the hot path.
+     *
+     * @param requestor_id The requestor that issued the packet
+     * @return The core id, or -1 if the requestor is not a core
+     */
+    int requestorCpuId(RequestorID requestor_id);
+    std::vector<int> requestorCpuIds;
+
+    /**
+     * Charge one memory access against a core's MemGuard budget and throttle
+     * the core once the budget for this period is spent.
+     *
+     * @param cpu_id The core to charge
+     */
+    void memGuard(unsigned cpu_id);
 
     /**
      * Decode the incoming pkt, create a mem_pkt and push to the
@@ -617,6 +659,38 @@ class MemCtrl : public qos::MemCtrl
         // per-requestor raed and write average memory access latency
         statistics::Formula requestorReadAvgLat;
         statistics::Formula requestorWriteAvgLat;
+
+        // DETMEM: Bank- and core-specific memory-access statistics.
+        statistics::Scalar readBurstsBank0;
+        statistics::Scalar readBurstsCore0;
+        statistics::Scalar readBurstsCore0Other;
+        statistics::Scalar readBurstsBank3;
+        statistics::Scalar readBurstsCore3;
+        statistics::Scalar readBurstsCore3Other;
+        statistics::Average avgRdQLenBank0;
+        statistics::Average avgRespQLenBank0;
+        // DETMEM
+        /** Deterministic vs best-effort read service, for medusa. */
+        statistics::Scalar dmReadReqs;
+        statistics::Scalar beReadReqs;
+        statistics::Scalar totDmReadLat;
+        statistics::Scalar totBeReadLat;
+        statistics::Formula avgDmReadLat;
+        statistics::Formula avgBeReadLat;
+
+        statistics::Scalar totMemAccLatBank0;
+        statistics::Scalar totMemAccLatCore0;
+        statistics::Scalar totMemAccLatCore0Other;
+        statistics::Scalar totMemAccLatBank3;
+        statistics::Scalar totMemAccLatCore3;
+        statistics::Scalar totMemAccLatCore3Other;
+        // Formulas for bank/core specific latency
+        statistics::Formula avgMemAccLatBank0;
+        statistics::Formula avgMemAccLatCore0;
+        statistics::Formula avgMemAccLatCore0Other;
+        statistics::Formula avgMemAccLatBank3;
+        statistics::Formula avgMemAccLatCore3;
+        statistics::Formula avgMemAccLatCore3Other;
     };
 
     CtrlStats stats;

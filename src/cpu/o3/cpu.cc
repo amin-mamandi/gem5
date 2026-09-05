@@ -53,6 +53,8 @@
 #include "cpu/thread_context.hh"
 #include "debug/Activity.hh"
 #include "debug/Drain.hh"
+// DETMEM
+#include "debug/MemGuard.hh"
 #include "debug/O3CPU.hh"
 #include "debug/Quiesce.hh"
 #include "enums/MemoryMode.hh"
@@ -368,6 +370,12 @@ CPU::CPUStats::CPUStats(CPU *cpu)
         .prereq(quiesceCycles);
 }
 
+bool
+CPU::unblockDataCache()
+{
+    return iew.ldstQueue.getDataPort().unblockCache();
+}
+
 void
 CPU::tick()
 {
@@ -378,6 +386,9 @@ CPU::tick()
     ++baseStats.numCycles;
     updateCycleCounters(BaseCPU::CPU_STATE_ON);
 
+    if (updateMemGuard() && iew.ldstQueue.getDataPort().unblockCache()) {
+        DPRINTF(MemGuard, "CPU %u: unblocked data cache\n", cpuId());
+    }
 //    activity = false;
 
     //Tick each of the stages

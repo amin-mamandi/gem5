@@ -421,6 +421,36 @@ class BaseCPU : public ClockedObject
     inline Addr cacheLineSize() const { return _cacheLineSize; }
 
     /**
+     * Advance this core's MemGuard regulation period.
+     *
+     * Replenishes the budget once per System::budgetPeriodTicks and
+     * reports whether the core's data cache should be unblocked, either
+     * because the period rolled over or because something raised the MSHR
+     * limit.  Shared by the CPU models so the period and the core-id space
+     * cannot drift apart between them.
+     *
+     * @return true if the caller should unblock its data cache
+     */
+    bool updateMemGuard();
+
+    /**
+     * Unblock this CPU's data cache after a MemGuard period rolls over.
+     * Overridden by the CPU models that have a data port.
+     */
+    virtual bool unblockDataCache() { return false; }
+
+    /**
+     * Periodic MemGuard tick.
+     *
+     * This has to run independently of instruction execution: once a core's
+     * budget is spent its data cache blocks, so anything driven from fetch()
+     * or tick() would stop running exactly when the refill is needed, and the
+     * core would never be released.
+     */
+    void memGuardTick();
+    EventFunctionWrapper memGuardEvent;
+
+    /**
      * Serialize this object to the given output stream.
      *
      * @note CPU models should normally overload the serializeThread()

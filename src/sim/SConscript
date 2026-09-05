@@ -165,5 +165,7 @@ DebugFlag('DVFS')
 DebugFlag('Vma')
 DebugFlag('PowerDomain')
 DebugFlag('EnteringEventQueue')
+# DETMEM
+DebugFlag('MSHRInst')
 
 CompoundFlag('SyscallAll', [ 'SyscallBase', 'SyscallVerbose'])

@@ -326,7 +326,12 @@ Queued::translationComplete(DeferredPacket *dp, bool failed,
                     "cache/MSHR prefetch addr:%#x\n", target_paddr);
         } else {
             Tick pf_time = curTick() + clockPeriod() * latency;
-            it->createPkt(target_paddr, blkSize, requestorId, tagPrefetch,
+            // Attribute the prefetch to the core whose access triggered it,
+            // not to the prefetcher itself.  A shared L2 prefetcher would
+            // otherwise send ownerless traffic to the memory controller,
+            // which per-core bandwidth regulation cannot charge to anyone.
+            it->createPkt(target_paddr, blkSize,
+                          it->pfInfo.getRequestorId(), tagPrefetch,
                           pf_time);
             addToQueue(pfq, *it);
         }
@@ -378,8 +383,8 @@ Queued::createPrefetchRequest(Addr addr, PrefetchInfo const &pfi,
                                         PacketPtr pkt)
 {
     RequestPtr translation_req = std::make_shared<Request>(
-            addr, blkSize, pkt->req->getFlags(), requestorId, pfi.getPC(),
-            pkt->req->contextId());
+            addr, blkSize, pkt->req->getFlags(), pfi.getRequestorId(),
+            pfi.getPC(), pkt->req->contextId());
     translation_req->setFlags(Request::PREFETCH);
     return translation_req;
 }
@@ -467,8 +472,8 @@ Queued::insert(const PacketPtr &pkt, PrefetchInfo &new_pfi,
     DeferredPacket dpp(this, new_pfi, 0, priority, cache);
     if (has_target_pa) {
         Tick pf_time = curTick() + clockPeriod() * latency;
-        dpp.createPkt(target_paddr, blkSize, requestorId, tagPrefetch,
-                      pf_time);
+        dpp.createPkt(target_paddr, blkSize, new_pfi.getRequestorId(),
+                      tagPrefetch, pf_time);
         DPRINTF(HWPrefetch, "Prefetch queued. "
                 "addr:%#x priority: %3d tick:%lld.\n",
                 new_pfi.getAddr(), priority, pf_time);

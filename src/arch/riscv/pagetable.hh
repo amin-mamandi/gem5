@@ -65,11 +65,14 @@ const Addr SV39X4_WIDENED_BITS = 2;
 
 BitUnion64(PTESv39)
     Bitfield<63> n;
-    Bitfield<62, 54> reserved;
+    Bitfield<62, 55> reserved;
+    Bitfield<54>     mt;  // DETMEM: for deterministic memory
     Bitfield<53, 10> ppn;
     Bitfield<53, 28> ppn2;
     Bitfield<27, 19> ppn1;
     Bitfield<18, 10> ppn0;
+    // DETMEM
+    Bitfield<9, 8>   rsw;
     Bitfield<7> d;
     Bitfield<6> a;
     Bitfield<5> g;
@@ -93,6 +96,9 @@ typedef Trie<Addr, TlbEntry> TlbEntryTrie;
 
 struct TlbEntry : public Serializable
 {
+    // DETMEM
+    bool deterministic;
+
     // The base of the physical page.
     Addr paddr;
 
@@ -112,9 +118,17 @@ struct TlbEntry : public Serializable
     // A sequence number to keep track of LRU.
     uint64_t lruSeq;
 
+    // DETMEM
     TlbEntry()
-        : paddr(0), vaddr(0), logBytes(0), pte(), gpte(), lruSeq(0)
+        : deterministic(false), paddr(0), vaddr(0), logBytes(0), pte(),
+          gpte(), lruSeq(0)
     {}
+
+    // DETMEM: Check if this page is deterministic memory
+    bool isDetMemory() const
+    {
+        return (pte.mt) || deterministic;
+    }
 
     // Return the page size in bytes
     Addr size() const

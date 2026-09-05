@@ -53,6 +53,8 @@
 #include "base/types.hh"
 #include "mem/cache/base.hh"
 #include "mem/packet.hh"
+// DETMEM
+#include "debug/DetCache.hh"
 
 namespace gem5
 {
@@ -86,7 +88,8 @@ class Cache : public BaseCache
     void promoteWholeLineWrites(PacketPtr pkt);
 
     bool access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
-                PacketList &writebacks) override;
+                // DETMEM
+                PacketList &writebacks, bool isDet) override;
 
     void handleTimingReqHit(PacketPtr pkt, CacheBlk *blk,
                             Tick request_time) override;
@@ -103,6 +106,15 @@ class Cache : public BaseCache
 
     void serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt,
                             CacheBlk *blk) override;
+
+    // DETMEM
+    /**
+     * Handle a request to clear the blocked status of the cache.
+     * Called from the CPU side to indicate that resources are available.
+     *
+     * @return True if the cache was blocked before the call
+     */
+    bool unblockCache() override;
 
     void recvTimingSnoopReq(PacketPtr pkt) override;
 

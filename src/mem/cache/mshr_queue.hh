@@ -52,6 +52,10 @@
 #include "mem/cache/queue.hh"
 #include "mem/packet.hh"
 
+// DETMEM
+#include "debug/DetMSHR.hh"
+#include "sim/system.hh"
+
 namespace gem5
 {
 
@@ -79,7 +83,9 @@ class MSHRQueue : public Queue<MSHR>
      * demand accesses.
      */
     MSHRQueue(const std::string &_label, int num_entries, int reserve,
-              int demand_reserve, std::string cache_name);
+              // DETMEM
+              int demand_reserve, std::string cache_name, System *_system,
+              bool _is_dcache, uint8_t _cpu_id);
 
     /**
      * Allocates a new MSHR for the request and size. This places the request

@@ -49,6 +49,11 @@
 #include <cassert>
 #include <cstdint>
 #include <deque>
+
+// DETMEM
+#include <iomanip>
+#include <iostream>
+#include <queue>
 #include <string>
 
 #include "base/addr_range.hh"
@@ -75,6 +80,11 @@
 #include "sim/serialize.hh"
 #include "sim/sim_exit.hh"
 #include "sim/system.hh"
+
+// DETMEM
+#include "base/trace.hh"
+#include "debug/DetCache.hh"
+#include "sim/clocked_object.hh"
 
 namespace gem5
 {
@@ -121,6 +131,8 @@ class BaseCache : public ClockedObject
     {
         Blocked_NoMSHRs = MSHRQueue_MSHRs,
         Blocked_NoWBBuffers = MSHRQueue_WriteBuffer,
+        // DETMEM
+        Blocked_MemGuard,
         Blocked_NoTargets,
         NUM_BLOCKED_CAUSES
     };
@@ -273,6 +285,12 @@ class BaseCache : public ClockedObject
 
         bool isBlocked() const { return blocked; }
 
+        // DETMEM
+        /**
+         * Handle unblock requests from the connected request port
+         */
+        virtual bool handleUnblockRequest();
+
       protected:
 
         CacheResponsePort(const std::string &_name, BaseCache& _cache,
@@ -307,6 +325,9 @@ class BaseCache : public ClockedObject
         virtual bool tryTiming(PacketPtr pkt) override;
 
         virtual bool recvTimingReq(PacketPtr pkt) override;
+
+        // DETMEM
+        // virtual bool unblockCache();
 
         virtual Tick recvAtomic(PacketPtr pkt) override;
 
@@ -494,7 +515,8 @@ class BaseCache : public ClockedObject
      * @return Boolean indicating whether the request was satisfied.
      */
     virtual bool access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
-                        PacketList &writebacks);
+                        // DETMEM
+                        PacketList &writebacks, bool isDeterministic);
 
     /*
      * Handle a timing request that hit in the cache
@@ -571,6 +593,15 @@ class BaseCache : public ClockedObject
      * @param pkt The current bus transaction.
      */
     virtual void recvTimingSnoopReq(PacketPtr pkt) = 0;
+
+    // DETMEM
+    /**
+     * Unblock the cache port
+     */
+    virtual bool unblockCache() = 0;
+
+    /** Apply a pending clearDM() request on the LLC, if there is one. */
+    void handlePendingClearDM();
 
     /**
      * Handle a snoop response.
@@ -819,7 +850,9 @@ class BaseCache : public ClockedObject
      * @param writebacks A list of writeback packets for the evicted blocks
      * @return the allocated block
      */
-    CacheBlk *allocateBlock(const PacketPtr pkt, PacketList &writebacks);
+    // DETMEM
+    CacheBlk *allocateBlock(const PacketPtr pkt, PacketList &writebacks, bool
+        isDetermReq);
     /**
      * Evict a cache block.
      *
@@ -1287,6 +1320,18 @@ class BaseCache : public ClockedObject
         /** The average miss latency for all misses. */
         statistics::Formula overallAvgMissLatency;
 
+        /**
+         * Deterministic-memory propagation counters.
+         *
+         * These are recorded for every cache in the hierarchy regardless of
+         * the way-partitioning mode, so a run can show how far the
+         * DETERMINISTIC request flag actually reaches without needing a
+         * debug trace.
+         */
+        statistics::Scalar detmemAccesses;
+        statistics::Scalar detmemHits;
+        statistics::Scalar detmemFills;
+
         /** The total number of cycles blocked for each blocked cause. */
         statistics::Vector blockedCycles;
         /** The number of times this cache blocked for each blocked cause. */
@@ -1344,6 +1389,21 @@ class BaseCache : public ClockedObject
          */
         statistics::Scalar dataContractions;
 
+
+        // DETMEM: New DM-specific stats
+        // statistics::Vector dmHits;
+        // statistics::Vector dmMisses;
+
+        // // DM stats - aggregated across commands
+        // statistics::Formula dmDemandHits;
+        // statistics::Formula dmDemandMisses;
+        // statistics::Formula dmDemandAccesses;
+
+        // // Non-DM request counters
+        // statistics::Scalar nonDmKernelReq;
+        // statistics::Scalar nonDmUserReq;
+        // statistics::Scalar nonDmNoVaddrReq;
+
         /** Per-command statistics */
         std::vector<std::unique_ptr<CacheCmdStats>> cmd;
     } stats;
@@ -1374,9 +1434,16 @@ class BaseCache : public ClockedObject
 
     MSHR *allocateMissBuffer(PacketPtr pkt, Tick time, bool sched_send = true)
     {
+        // MemGuard throttling is applied through the MSHR limit that
+        // MSHRQueue::isFull() enforces, which makes the cache block and the
+        // requestor retry.  It must not be done by returning nullptr here:
+        // every caller ignores the return value, so the packet would simply
+        // be dropped and the core would wait forever for a response that
+        // never comes.
         MSHR *mshr = mshrQueue.allocate(pkt->getBlockAddr(blkSize), blkSize,
                                         pkt, time, order++,
                                         allocOnFill(pkt->cmd));
+
 
         if (mshrQueue.isFull()) {
             setBlocked((BlockedCause)MSHRQueue_MSHRs);
@@ -1398,6 +1465,12 @@ class BaseCache : public ClockedObject
     bool isBlocked() const
     {
         return blocked != 0;
+    }
+
+    /** Is the cache blocked for this specific cause? */
+    bool isBlockedFor(BlockedCause cause) const
+    {
+        return (blocked & (1 << cause)) != 0;
     }
 
     /**
@@ -1427,8 +1500,11 @@ class BaseCache : public ClockedObject
     void clearBlocked(BlockedCause cause)
     {
         uint8_t flag = 1 << cause;
+
         blocked &= ~flag;
-        DPRINTF(Cache,"Unblocking for cause %d, mask=%d\n", cause, blocked);
+        // DETMEM
+        DPRINTF(DetCache, "Unblocking for cause %d, mask=%d\n", cause,
+            blocked);
         if (blocked == 0) {
             stats.blockedCycles[cause] += curCycle() - blockedCycle;
             cpuSidePort.clearBlocked(cause == Blocked_NoMSHRs);
@@ -1472,6 +1548,10 @@ class BaseCache : public ClockedObject
     {
         assert(pkt->req->requestorId() < system->maxRequestors());
         stats.cmdStats(pkt).misses[pkt->req->requestorId()]++;
+        // DETMEM: Also count misses from deterministic requests.
+        // if (pkt->req->isDeterministic()) {
+        //     stats.dmMisses[pkt->req->requestorId()]++;
+        // }
         pkt->req->incAccessDepth();
         if (missCount) {
             --missCount;
@@ -1483,6 +1563,10 @@ class BaseCache : public ClockedObject
     {
         assert(pkt->req->requestorId() < system->maxRequestors());
         stats.cmdStats(pkt).hits[pkt->req->requestorId()]++;
+        // DETMEM: Also count hits from deterministic requests.
+        // if (pkt->req->isDeterministic()) {
+        //     stats.dmHits[pkt->req->requestorId()]++;
+        // }
     }
 
     /**
@@ -1533,6 +1617,13 @@ class BaseCache : public ClockedObject
      */
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
+// DETMEM
+
+    bool isLLC;
+    bool is_dcache;
+    bool is_icache;
+    /** CPU ID for this cache (for private caches) */
+    const uint8_t cpu_id = -1;
 };
 
 /**

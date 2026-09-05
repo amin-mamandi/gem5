@@ -64,6 +64,10 @@
 #include "sim/sim_object.hh"
 #include "sim/workload.hh"
 
+// DETMEM
+#include "debug/MSHRInst.hh"
+#include "kern/system_events.hh"
+
 namespace gem5
 {
 
@@ -305,6 +309,18 @@ class System : public SimObject, public PCEventScope
      * @param mode Mode to change to (atomic/timing/...)
      */
     void setMemoryMode(enums::MemoryMode mode);
+    // DETMEM
+    void setMshr(unsigned cpu_id, int mshrcount);
+    int  getmshrCount(unsigned cpu_id) const;
+    void setMemBudget(unsigned cpu_id, uint64_t mb_per_sec);
+    void resetMemBudget(unsigned cpu_id);
+    void enableMemGuard(int use);
+    void setWayPartMode(int use);
+    int getWayPartMode();
+    void clearDM(int cpu_id);
+    void enableMemGuardForCore(unsigned cpu_id, bool enable = true);
+    bool isMemGuardEnabledForCore(unsigned cpu_id) const;
+
     /** @} */
 
     /**
@@ -434,6 +450,90 @@ class System : public SimObject, public PCEventScope
   public:
 
     /**
+     * 0: partitioning disabled
+     * 1: simple Way-based partitioning
+     * 2: deterministic memory replacement policy
+    */
+     int wayPartMode;
+
+    // DETMEM
+    /**
+     * Per-core MemGuard state.  These are sized on demand from the cpu ids
+     * actually used, so a system with more cores than the previous fixed
+     * four no longer writes past the end of the arrays.
+     */
+    std::vector<int64_t> memoryBudget;      // Remaining budget this period
+    std::vector<int64_t> budgetInit;        // Value restored on reset
+    std::vector<int> mshrCount;             // MSHR limit, <0 == unregulated
+    std::vector<bool> pendingUnblock;       // Cache unblock requested
+    std::vector<bool> memguardEnabled;      // Per-core enable
+    std::vector<uint64_t> cycleInit;        // Cycle the period started
+
+    /**
+     * Length of a regulation period, in ticks.  Kept in ticks rather than
+     * cycles so that a bandwidth budget converts to an access count without
+     * depending on any particular core's clock.  Default 500us.
+     */
+    Tick budgetPeriodTicks = 500000000;
+
+    /** Bandwidth requested for each core, in MB/s (0 = not set). */
+    std::vector<uint64_t> budgetMBPerSec;
+
+    /** Bytes moved by one memory access, for the MB/s conversion. */
+    static const uint64_t memGuardBurstBytes = 64;
+
+    /** Convert a bandwidth in MB/s to accesses per regulation period. */
+    int64_t bandwidthToBudget(uint64_t mb_per_sec) const;
+
+    /** Grow the per-core MemGuard vectors so cpu_id is a valid index. */
+    void ensureCpuState(size_t cpu_id)
+    {
+        if (cpu_id < memguardEnabled.size())
+            return;
+        const size_t n = cpu_id + 1;
+        memoryBudget.resize(n, -1);
+        budgetInit.resize(n, 0);
+        mshrCount.resize(n, -1);
+        pendingUnblock.resize(n, false);
+        memguardEnabled.resize(n, false);
+        cycleInit.resize(n, 0);
+        budgetMBPerSec.resize(n, 0);
+    }
+
+    /**
+     * Memguard enabled for the system.
+     */
+    int use_memguard;
+
+    /**
+     * System-wide clear deterministic memory flag.
+     */
+    bool clearDmFlag;
+
+    /**
+     * CPU ID for clear deterministic memory.
+     */
+    int clearDmCpuId;
+
+    /**
+     * Reserved bank mask.  Retained for the bank-partitioning experiments;
+     * deterministic-memory prioritisation no longer keys off it.
+     */
+    uint64_t medusaReservedBankMask;
+
+    /**
+     * Give requests carrying Request::DETERMINISTIC priority in the memory
+     * controller.  Identifying them by the flag rather than by bank means the
+     * guest does not have to place deterministic pages in particular banks.
+     */
+    bool dmPrioritize;
+
+    /**
+     * Max requests served from reserved banks.
+     */
+    // uint64_t dm_req_srv_thresh = 30;
+
+    /**
      * Request an id used to create a request object in the system. All objects
      * that intend to issues requests into the memory system must request an id
      * in the init() phase of startup. All requestor ids must be fixed by the
@@ -498,6 +598,7 @@ class System : public SimObject, public PCEventScope
 
     /** Get the number of requestors registered in the system */
     RequestorID maxRequestors() { return requestors.size(); }
+
 
   protected:
     /** helper function for getRequestorId */

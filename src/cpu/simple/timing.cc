@@ -56,6 +56,8 @@
 #include "sim/faults.hh"
 #include "sim/full_system.hh"
 #include "sim/system.hh"
+// DETMEM
+#include "debug/MemGuard.hh"
 
 namespace gem5
 {
@@ -674,6 +676,12 @@ TimingSimpleCPU::finishTranslation(WholeTranslationState *state)
     delete state;
 }
 
+
+bool
+TimingSimpleCPU::unblockDataCache()
+{
+    return dcachePort.unblockCache();
+}
 
 void
 TimingSimpleCPU::fetch()

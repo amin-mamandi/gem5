@@ -47,6 +47,8 @@
 #include <cassert>
 
 #include "debug/MSHR.hh"
+// DETMEM
+#include "debug/DetMSHR.hh"
 #include "mem/cache/mshr.hh"
 
 namespace gem5
@@ -54,8 +56,12 @@ namespace gem5
 
 MSHRQueue::MSHRQueue(const std::string &_label,
                      int num_entries, int reserve,
-                     int demand_reserve, std::string cache_name = "")
-    : Queue<MSHR>(_label, num_entries, reserve, cache_name + ".mshr_queue"),
+                     // DETMEM
+                     int demand_reserve, std::string cache_name = "",
+                     System *_system = nullptr, bool _is_dcache = false,
+                     uint8_t _cpu_id = 0)
+    : Queue<MSHR>(_label, num_entries, reserve, cache_name + ".mshr_queue",
+                  _system, _is_dcache, _cpu_id),
       demandReserve(demand_reserve)
 {}
 

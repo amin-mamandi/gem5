@@ -449,6 +449,24 @@ TLB::doTranslate(const RequestPtr &req, ThreadContext *tc,
     Addr paddr = ((e->paddr >> (e->logBytes - PageShift)) << e->logBytes)
         | (vaddr & mask(e->logBytes));
 
+    // DETMEM
+    if (e->isDetMemory()) {
+        const uint64_t oldFlags = req->getFlags();
+        req->setFlags(req->getFlags() | Request::DETERMINISTIC);
+        const uint64_t newFlags = req->getFlags();
+
+        DPRINTF(DetTLB, "TLB setting DETERMINISTIC flag for addr %#x:"
+                " flags %#x -> %#x, isDeterministic=%d\n",
+                vaddr, oldFlags, newFlags, req->isDeterministic());
+
+        DPRINTF(TLBVerbose, "doTranslate: vaddr=%#x paddr=%#x mode=%s "
+            "vpn=%#x asid=%d size=%#x pc=%#x rsw=%d\n",
+            vaddr, paddr,
+            (mode == BaseMMU::Read) ? "READ" :
+            (mode == BaseMMU::Write) ? "WRITE" : "EXECUTE",
+            getVPNFromVAddr(vaddr, satp.mode),
+            satp.asid, e->size(), req->getPC(), e->pte.rsw);
+    }
     DPRINTF(TLBVerbose, "translate(vaddr=%#x, vpn=%#x, asid=%#x): %#x\n",
             vaddr, vpn, satp.asid, paddr);
     req->setPaddr(paddr);

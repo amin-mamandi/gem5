@@ -190,6 +190,7 @@ class Request : public Extensible<Request>
         /** The request is a page table walk */
         PT_WALK                     = 0x20000000,
 
+
         /** The request invalidates a memory location */
         INVALIDATE                  = 0x0000000100000000,
         /** The request cleans a memory location */
@@ -262,6 +263,11 @@ class Request : public Extensible<Request>
         /** TLBI_EXT_SYNC_COMP seems to be the largest value
             of FlagsType, so HAS_NO_ADDR's value is that << 1 */
         HAS_NO_ADDR                = 0x0001000000000000,
+        // DETMEM
+        /** The request targets deterministic memory.  Must not reuse
+            HAS_NO_ADDR's bit, which the comment above documents as the
+            previous highest value. */
+        DETERMINISTIC              = 0x0002000000000000,
         // clang-format on
     };
     static const FlagsType STORE_NO_DATA = CACHE_BLOCK_ZERO |
@@ -1021,6 +1027,8 @@ class Request : public Extensible<Request>
 
     /** Accessor functions for flags. Note that these are for testing
         only; setting flags should be done via setFlags(). */
+    // DETMEM
+    bool isDeterministic() const { return _flags.isSet(DETERMINISTIC); }
     bool isUncacheable() const { return _flags.isSet(UNCACHEABLE); }
     bool isStrictlyOrdered() const { return _flags.isSet(STRICT_ORDER); }
     bool isInstFetch() const { return _flags.isSet(INST_FETCH); }
