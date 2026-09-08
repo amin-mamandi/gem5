@@ -125,6 +125,18 @@ class PMP : public SimObject
     void unserialize(CheckpointIn &cp) override;
 
     /**
+     * Copy the PMP configuration from another PMP unit.
+     *
+     * A live CPU switch (Simulator.switch_processor(), not a checkpoint
+     * restore) builds a fresh PMP for the new CPU, which starts with
+     * numRules == 0 -- see the note on serialize()/unserialize() above.
+     * MMU::takeOverFrom() calls this so the switched-to CPU keeps working
+     * with the PMP rules the kernel already programmed, instead of every
+     * S-mode/U-mode access faulting from that point on.
+     */
+    void takeOverFrom(PMP *old);
+
+    /**
      * pmpCheck checks if a particular memory access
      * is allowed based on the pmp rules.
      * @param req memory request.

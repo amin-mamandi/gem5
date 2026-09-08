@@ -96,6 +96,13 @@ PMP::unserialize(CheckpointIn &cp)
     }
 }
 
+void
+PMP::takeOverFrom(PMP *old)
+{
+    pmpTable = old->pmpTable;
+    numRules = old->numRules;
+}
+
 Fault
 PMP::pmpCheck(const RequestPtr &req, BaseMMU::Mode mode,
               PrivilegeMode pmode, ThreadContext *tc, Addr vaddr)
